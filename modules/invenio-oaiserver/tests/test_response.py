@@ -38,7 +38,6 @@ NAMESPACES = {'x': NS_OAIPMH, 'y': NS_OAIDC, 'z': NS_DC}
 #            url="https://192.168.75.3/oai")# TODO 適切なデータにする
 #    res = getrecord(kwargs)
 #    #TODO 戻り値
-
 def test_listrecords(app,records,item_type,mock_execute,mocker):
     with app.app_context():
         identify = Identify(
@@ -117,10 +116,7 @@ def test_listrecords(app,records,item_type,mock_execute,mocker):
                 ]
             }
         }
-
         ns={"root_name": "jpcoar", "namespaces":{'': 'https://github.com/JPCOAR/schema/blob/master/1.0/', 'dc': 'http://purl.org/dc/elements/1.1/', 'xs': 'http://www.w3.org/2001/XMLSchema', 'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#', 'xml': 'http://www.w3.org/XML/1998/namespace', 'dcndl': 'http://ndl.go.jp/dcndl/terms/', 'oaire': 'http://namespace.openaire.eu/schema/oaire/', 'jpcoar': 'https://github.com/JPCOAR/schema/blob/master/1.0/', 'dcterms': 'http://purl.org/dc/terms/', 'datacite': 'https://schema.datacite.org/meta/kernel-4/', 'rioxxterms': 'http://www.rioxx.net/schema/v2.0/rioxxterms/'}}
-        mock_today = datetime.datetime(2022,8,8,0,0,0,0)
-        mocker.patch("datetime.datetime",**{"now.return_value":mock_today})
         mocker.patch("invenio_oaiserver.response.OAISet.get_set_by_spec",return_value=oaiset)
         mocker.patch("invenio_oaiserver.response.to_utc",side_effect=lambda x:x)
         mocker.patch("weko_index_tree.utils.get_user_groups",return_value=[])
