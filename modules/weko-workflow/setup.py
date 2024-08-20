@@ -99,26 +99,19 @@ setup(
             'weko_workflow = weko_workflow.admin:workflow_adminview',
             'weko_flow = weko_workflow.admin:flow_adminview',
         ],
-        'invenio_assets.bundles': [
-            'workflow_js = weko_workflow.bundles:js_workflow',
-            'workflow_item_link_js = weko_workflow.bundles:js_item_link',
-            'workflow_activity_list_js = '
-            'weko_workflow.bundles:js_activity_list',
-            'workflow_iframe_js = weko_workflow.bundles:js_iframe',
-            'workflow_oa_policy_js = weko_workflow.bundles:js_oa_policy',
-            'workflow_css = weko_workflow.bundles:css_workflow',
-            'workflow_datepicker_css ='
-            ' weko_workflow.bundles:css_datepicker_workflow',
-            'workflow_identifier_grant_js = '
-            'weko_workflow.bundles:js_identifier_grant',
-            'workflow_quit_confirmation_js = '
-            'weko_workflow.bundles:js_quit_confirmation',
-            'workflow_lock_activity_js = '
-            'weko_workflow.bundles:js_lock_activity',
-            'workflow_detail_admin_js = '
-            'weko_workflow.bundles:js_admin_workflow_detail',
-            'flow_detail_admin_js = '
-            'weko_workflow.bundles:js_admin_flow_detail',
+        'invenio_assets.webpack': [
+            'workflow-js-workflow = weko_workflow.webpack:weko_workflow',
+            'workflow-js-item-link = weko_workflow.webpack:weko_workflow',
+            'workflow-js-activity-list = weko_workflow.webpack:weko_workflow',
+            'workflow-js-iframe = weko_workflow.webpack:weko_workflow',
+            'workflow-js-oa-policy = weko_workflow.webpack:weko_workflow',
+            'workflow-js-identifier-grant = weko_workflow.webpack:weko_workflow',
+            'workflow-js-quit-confirmation = weko_workflow.webpack:weko_workflow',
+            'workflow-js-lock-activity = weko_workflow.webpack:weko_workflow',
+            'workflow-js-admin-workflow-detail = weko_workflow.webpack:weko_workflow',
+            'workflow-css-workflow = weko_workflow.webpack:weko_workflow',
+            'workflow-css-datepicker-workflow = weko_workflow.webpack:weko_workflow',
+            'workflow-js-admin-flow-detail = weko_workflow.webpack:weko_workflow',
         ],
         'invenio_i18n.translations': [
             'messages = weko_workflow',

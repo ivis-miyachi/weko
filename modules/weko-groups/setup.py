@@ -113,9 +113,9 @@ setup(
         'invenio_i18n.translations': [
             'messages = weko_groups',
         ],
-        'invenio_assets.bundles': [
-            'weko_groups_js = weko_groups.bundles:js',
-            'weko_groups_styles = weko_groups.bundles:styles',
+        'invenio_assets.webpack': [
+            'group_js_js = weko_groups.webpack:weko_groups',
+            'group_css_styles = weko_groups.webpack:weko_groups',
         ],
         'invenio_db.alembic': [
             'weko_groups = weko_groups:alembic',

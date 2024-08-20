@@ -79,14 +79,14 @@ setup(
             'messages = weko_sitemap',
         ],
         'invenio_admin.views': [
-            'weko_sitemap_sitemap = weko_sitemap.admin:sitemap_adminview',
+            'weko_sitemap_sitemap = weko_sitemap.admin:weko_sitemap',
         ],
         # TODO: Edit these entry points to fit your needs.
         # 'invenio_access.actions': [],
         # 'invenio_admin.actions': [],
-        'invenio_assets.bundles': [
-            'weko_sitemap_js = weko_sitemap.bundles:js',
-            'weko_sitemap_css = weko_sitemap.bundles:css',
+        'invenio_assets.webpack': [
+            'sitemap-js-js = weko_sitemap.webpack:sitemap-js-js',
+            'sitemap-css-css = weko_sitemap.webpack:sitemap-css-css',
         ],
         # 'invenio_base.api_apps': [],
         # 'invenio_base.api_blueprints': [],
