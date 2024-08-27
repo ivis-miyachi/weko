@@ -12,7 +12,7 @@ weko_search_ui = WebpackThemeBundle(
                 'search-ui-js-weko-search-ui': './js/weko_search_ui/app.js',
                 'search-ui-js-import': './js/weko_search_ui/import.js',
                 'search-ui-js-export': './js/weko_search_ui/export.js',
-                'search-ui-js-moment': './js/weko_search_ui/moment.min.js',
+                #'search-ui-js-moment': './js/weko_search_ui/moment.min.js', TODO: htmlでこれを使用箇所をnode_modulesからの使用に変更
                 'search-ui-less-import': './css/weko_search_ui/import.less',
                 'search-ui-less-export': './css/weko_search_ui/export.less',
                 'search-ui-js-facet-search': './js/weko_search_ui/facet_search_bundle.js',
@@ -26,6 +26,7 @@ weko_search_ui = WebpackThemeBundle(
                 "react": "~15.6.1",
                 "react-bootstrap": "~0.33.1",
                 "react-dom": "~15.6.1",
+                'moment':'~2.24'
             }
         )
     }
