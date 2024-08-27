@@ -21,11 +21,13 @@
   {{ webpack['js-dependencies.js']}}
   
   {{ super() }}
-  {{ webpack['theme-js-weko-theme-tree-view.js']}}
-  {{ webpack['theme-js-top-page.js']}}
-  {{ webpack['theme-search-detail.js']}}
-  {{ webpack['records_ui_js_dependecies.js']}}
-  {{ webpack['records_ui_js.js']}}
+  <script src="{{ url_for('static', filename='js/weko_theme/inline.bundle.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/weko_theme/polyfills.bundle.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/weko_theme/main.bundle.js') }}"></script>
+  {% assets "weko_theme_js_top_page" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
+  {% assets "weko_theme_js_detail_search" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
+  {% assets "weko_records_ui_dependencies_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
+  {% assets "weko_records_ui_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
   <script src="{{ url_for('static', filename='js/weko_records_ui/record_view_stats.js')}}"></script>
   {{ webpack['records_ui_preview_carousel.js']}}
   {%- set site_info = site_info|get_site_info %}

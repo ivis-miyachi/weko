@@ -27,8 +27,10 @@
 
 {%- block javascript %}
   {{ super() }}
-  {{ webpack['items_ui_js_dependencies_angularjs.js']}}
-  {{ webpack['theme-js-widget.js']}}
+  <script src="{{ url_for('static', filename='js/weko_items_ui/inline.bundle.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/weko_items_ui/polyfills.bundle.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/weko_items_ui/main.bundle.js') }}"></script>
+  {% assets "weko_theme_js_widget" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
 {%- endblock javascript %}
 
 {%- block page_body_tabs %}
