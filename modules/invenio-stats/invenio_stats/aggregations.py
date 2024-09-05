@@ -493,17 +493,18 @@ class StatAggregator(object):
         """Delete aggregation documents and bookmarks."""
         # TODO　Qin　Zhe 
         # indexは統括した後のindexにする必要があります
-        query = StatsAggregation.query.filter(
-            StatsAggregation.index == self.index,
-            StatsAggregation.event_type == self.event
-        )
-        
+        aggs_query = dsl.Search(
+            using=self.client,
+            index=self.index,
+        ).extra(_source=False).filter("term", event_type=self.event)
+
+        range_args = {}
         if start_date:
-            query = query.filter(StatsAggregation.date >= start_date)
+            range_args["gte"] = format_range_dt(start_date, self.interval)
         if end_date:
-            query = query.filter(StatsAggregation.date <= end_date)
-        
-        query.delete(synchronize_session=False)
+            range_args["lte"] = format_range_dt(end_date, self.interval)
+        if range_args:
+            aggs_query = aggs_query.filter("range", timestamp=range_args)
 
         # Delete bookmarks
         bookmark_query = StatsBookmark.query.filter_by(agg_type=self.name)
