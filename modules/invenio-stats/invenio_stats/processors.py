@@ -213,6 +213,7 @@ class EventsIndexer(object):
                 ts = ts.replace(microsecond=0)
                 msg["timestamp"] = ts.isoformat()
                 msg["updated_timestamp"] = datetime.utcnow().isoformat()
+                msg['event_type'] = self.queue.routing_key
                 # apply timestamp windowing in order to group events too close in time
                 if self.double_click_window > 0:
                     timestamp = mktime(utc.localize(ts).utctimetuple())

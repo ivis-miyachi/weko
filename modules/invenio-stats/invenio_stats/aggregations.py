@@ -24,6 +24,7 @@ from flask import current_app
 from invenio_search import current_search_client
 from invenio_search.engine import dsl, search
 from invenio_search.utils import prefix_index
+from invenio_db import db
 
 from .models import StatsAggregation, StatsBookmark
 
@@ -343,6 +344,9 @@ class StatAggregator(object):
     def agg_iter(self, dt, previous_bookmark):
         """Aggregate and return dictionary to be indexed in the search engine."""
         rounded_dt = format_range_dt(dt, self.interval)
+
+        # TODO　Qin　Zhe
+        # 統括した後のindexとevent_typeでdocumentを特定します
         agg_query = (
             dsl.Search(using=self.client, index=self.event_index).filter(
                 # Filter for the specific interval (hour, day, month)
@@ -409,6 +413,7 @@ class StatAggregator(object):
                 aggregation_data[self.field] = aggregation["key"]
                 aggregation_data["count"] = aggregation["doc_count"]
                 aggregation_data["updated_timestamp"] = datetime.utcnow().isoformat()
+                aggregation_data['agg_type'] = self.event
 
                 if self.metric_fields:
                     for f in self.metric_fields:
@@ -485,44 +490,29 @@ class StatAggregator(object):
         return self.bookmark_api.list_bookmarks(start_date, end_date, limit)
 
     def delete(self, start_date=None, end_date=None):
-        """Delete aggregation documents."""
-        aggs_query = dsl.Search(
-            using=self.client,
-            index=self.index,
-        ).extra(_source=False)
-
-        range_args = {}
-        if start_date:
-            range_args["gte"] = format_range_dt(start_date, self.interval)
-        if end_date:
-            range_args["lte"] = format_range_dt(end_date, self.interval)
-        if range_args:
-            aggs_query = aggs_query.filter("range", timestamp=range_args)
-
-        bookmarks_query = (
-            dsl.Search(
-                using=self.client,
-                index=self.bookmark_api.bookmark_index,
-            )
-            .filter("term", aggregation_type=self.name)
-            .sort({"date": {"order": "desc"}})
+        """Delete aggregation documents and bookmarks."""
+        # TODO　Qin　Zhe 
+        # indexは統括した後のindexにする必要があります
+        query = StatsAggregation.query.filter(
+            StatsAggregation.index == self.index,
+            StatsAggregation.event_type == self.event
         )
+        
+        if start_date:
+            query = query.filter(StatsAggregation.date >= start_date)
+        if end_date:
+            query = query.filter(StatsAggregation.date <= end_date)
+        
+        query.delete(synchronize_session=False)
 
-        if range_args:
-            bookmarks_query = bookmarks_query.filter("range", date=range_args)
+        # Delete bookmarks
+        bookmark_query = StatsBookmark.query.filter_by(agg_type=self.name)
+        
+        if start_date:
+            bookmark_query = bookmark_query.filter(StatsBookmark.date >= start_date)
+        if end_date:
+            bookmark_query = bookmark_query.filter(StatsBookmark.date <= end_date)
+        
+        bookmark_query.delete(synchronize_session=False)
 
-        def _delete_actions():
-            for query in (aggs_query, bookmarks_query):
-                affected_indices = set()
-                for doc in query.scan():
-                    affected_indices.add(doc.meta.index)
-                    yield {
-                        "_index": doc.meta.index,
-                        "_op_type": "delete",
-                        "_id": doc.meta.id,
-                    }
-                current_search_client.indices.flush(
-                    index=",".join(affected_indices), wait_if_ongoing=True
-                )
-
-        search.helpers.bulk(self.client, _delete_actions(), refresh=True)
+        db.session.commit()
