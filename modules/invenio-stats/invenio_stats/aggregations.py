@@ -344,9 +344,6 @@ class StatAggregator(object):
     def agg_iter(self, dt, previous_bookmark):
         """Aggregate and return dictionary to be indexed in the search engine."""
         rounded_dt = format_range_dt(dt, self.interval)
-
-        # TODO　Qin　Zhe
-        # 統括した後のindexとevent_typeでdocumentを特定します
         agg_query = (
             dsl.Search(using=self.client, index=self.event_index).filter(
                 # Filter for the specific interval (hour, day, month)
@@ -413,7 +410,7 @@ class StatAggregator(object):
                 aggregation_data[self.field] = aggregation["key"]
                 aggregation_data["count"] = aggregation["doc_count"]
                 aggregation_data["updated_timestamp"] = datetime.utcnow().isoformat()
-                aggregation_data['agg_type'] = self.event
+                aggregation_data['event_type'] = self.event
 
                 if self.metric_fields:
                     for f in self.metric_fields:
@@ -491,12 +488,10 @@ class StatAggregator(object):
 
     def delete(self, start_date=None, end_date=None):
         """Delete aggregation documents and bookmarks."""
-        # TODO　Qin　Zhe 
-        # indexは統括した後のindexにする必要があります
         aggs_query = dsl.Search(
             using=self.client,
             index=self.index,
-        ).extra(_source=False).filter("term", event_type=self.event)
+        ).extra(_source=False)
 
         range_args = {}
         if start_date:
@@ -505,6 +500,20 @@ class StatAggregator(object):
             range_args["lte"] = format_range_dt(end_date, self.interval)
         if range_args:
             aggs_query = aggs_query.filter("range", timestamp=range_args)
+
+        def _delete_actions():
+            for query in (aggs_query, bookmarks_query):
+                affected_indices = set()
+                for doc in query.scan():
+                    affected_indices.add(doc.meta.index)
+                    yield {
+                        "_index": doc.meta.index,
+                        "_op_type": "delete",
+                        "_id": doc.meta.id,
+                    }
+                current_search_client.indices.flush(
+                    index=",".join(affected_indices), wait_if_ongoing=True
+                )
 
         # Delete bookmarks
         bookmark_query = StatsBookmark.query.filter_by(agg_type=self.name)
@@ -516,4 +525,5 @@ class StatAggregator(object):
         
         bookmark_query.delete(synchronize_session=False)
 
+        search.helpers.bulk(self.client, _delete_actions(), refresh=True)
         db.session.commit()

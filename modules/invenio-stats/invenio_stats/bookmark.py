@@ -101,7 +101,7 @@ class BookmarkAPI(object):
         if db_bookmark:
             my_date = db_bookmark.date
             # By default, the bookmark returns a slightly sooner date, to make sure that documents
-            # that had arrived before the previous run and were not indexed by the engine are caught in this run
+            # that had arrived before the previous run and where not indexed by the engine are caught in this run
             # This means that some events might be processed twice
             if refresh_time:
                 my_date -= timedelta(seconds=refresh_time)
