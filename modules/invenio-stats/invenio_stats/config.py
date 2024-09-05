@@ -406,7 +406,6 @@ STATS_QUERIES = {
         "cls": ESTermsQuery,
         "params": dict(
                 index='{}-stats-celery-task'.format(search_index_prefix),
-                doc_type='celery-task-day-aggregation',
                 aggregated_fields=['task_id', 'task_name', 'start_time',
                                    'end_time', 'total_records', 'task_state'],
                 required_filters=dict(
@@ -414,43 +413,573 @@ STATS_QUERIES = {
                 ),
             )
     },
-    'get-search-report': {},
-    'get-file-download-report': {},
-    'get-file-download-open-access-report': {},
-    'get-file-preview-report': {},
-    'get-file-preview-open-access-report': {},
-    'get-billing-file-download-report': {},
-    'get-billing-file-preview-report': {},
+    'get-search-report': {
+        "cls": ESWekoTermsQuery,
+        "params": dict(
+            index='{}-stats-search'.format(search_index_prefix),
+            group_fields=['search_key', 'count'],
+        )
+    },
+
+    'get-file-download-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            group_fields=['file_key', 'index_list', 'userrole',
+                        'site_license_flag', 'count'],
+        )
+    },
+
+    'get-file-download-open-access-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            group_fields=['file_key', 'index_list', 'userrole',
+                        'site_license_flag', 'count'],
+            required_filters=dict(
+                accessrole='accessrole',
+            ),
+        )
+    },
+
+    'get-file-preview-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-preview'.format(search_index_prefix),
+            group_fields=['file_key', 'index_list', 'userrole',
+                        'site_license_flag', 'count'],
+        )
+    },
+
+    'get-file-preview-open-access-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-preview'.format(search_index_prefix),
+            group_fields=['file_key', 'index_list', 'userrole',
+                        'site_license_flag', 'count'],
+            required_filters=dict(
+                accessrole='accessrole',
+            ),
+        )
+    },
+
+    'get-billing-file-download-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            group_fields=['file_key', 'index_list',
+                        'userrole', 'site_license_flag',
+                        'user_group_names', 'count'],
+            required_filters=dict(
+                is_billing_item='is_billing_item',
+            ),
+        )
+    },
+
+    'get-billing-file-preview-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-preview'.format(search_index_prefix),
+            group_fields=['file_key', 'index_list',
+                        'userrole', 'site_license_flag',
+                        'user_group_names', 'count'],
+            required_filters=dict(
+                is_billing_item='is_billing_item',
+            ),
+        )
+    },
+
     # 'bucket-celery-task-histogram': {},
     # 'bucket-celery-task-total': {},
-    'bucket-file-download-histogram': {},
-    'bucket-file-download-total': {},
-    'bucket-file-preview-histogram': {},
-    'bucket-file-preview-total': {},
-    'get-file-download-per-user-report': {},
-    'get-file-preview-per-user-report': {},
-    'get-record-view-report': {},
-    'bucket-record-view-histogram': {},
-    'bucket-record-view-total': {},
-    'item-create-total': {},
-    'item-create-per-date': {},
-    'item-create-histogram': {},
-    'item-detail-total': {},
-    'item-detail-item-total': {},
-    'bucket-item-detail-view-histogram': {},
-    'get-file-download-per-host-report': {},
-    'get-file-download-per-item-report': {},
-    'get-file-download-per-time-report': {},
-    'top-view-total': {},
-    'top-view-total-per-host': {},
-    'get-top-view-per-site-license': {},
-    'get-record-view-per-site-license': {},
-    'get-search-per-site-license': {},
-    'get-file-download-per-site-license': {},
-    'get-file-preview-per-site-license': {},
-    'get-ranking-data': {},
-    'get-new-items-data': {},
-    'item-file-download-aggs': {},
+
+    'bucket-file-download-histogram': {
+        "cls": ESDateHistogramQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            copy_fields=dict(
+                bucket_id='bucket_id',
+                file_key='file_key',
+            ),
+            required_filters=dict(
+                bucket_id='bucket_id',
+                file_key='file_key',
+            ),
+        )
+    },
+
+    'bucket-file-download-total': {
+        "cls": ESWekoFileStatsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            copy_fields=dict(),
+            main_fields=['bucket_id', 'file_key', 'root_file_id'],
+            main_query={
+                "query": {
+                    "bool": {
+                        "should": [
+                            {
+                                "bool": {
+                                    "filter": [
+                                        {
+                                            "term": {
+                                                "bucket_id": {
+                                                    "value": "@bucket_id",
+                                                    "boost": 1
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "term": {
+                                                "file_key": {
+                                                    "value": "@file_key",
+                                                    "boost": 1
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "bool": {
+                                                "must_not": {
+                                                    "exists": {
+                                                        "field": "root_file_id"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "bool": {
+                                    "filter": [
+                                        {
+                                            "term": {
+                                                "root_file_id": {
+                                                    "value": "@root_file_id",
+                                                    "boost": 1
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ],
+                        "adjust_pure_negative": True,
+                        "boost": 1
+                    }
+                }
+            },
+            aggregated_fields=['country'],
+        )
+    },
+
+    'bucket-file-preview-histogram': {
+        "cls": ESDateHistogramQuery,
+        "params": dict(
+            index='{}-stats-file-preview'.format(search_index_prefix),
+            copy_fields=dict(
+                bucket_id='bucket_id',
+                file_key='file_key',
+            ),
+            required_filters=dict(
+                bucket_id='bucket_id',
+                file_key='file_key',
+            ),
+        )
+    },
+
+    'bucket-file-preview-total': {
+        "cls": ESWekoFileStatsQuery,
+        "params": dict(
+            index='{}-stats-file-preview'.format(search_index_prefix),
+            copy_fields=dict(),
+            main_fields=['bucket_id', 'file_key', 'root_file_id'],
+            main_query={
+                "query": {
+                    "bool": {
+                        "should": [
+                            {
+                                "bool": {
+                                    "filter": [
+                                        {
+                                            "term": {
+                                                "bucket_id": {
+                                                    "value": "@bucket_id",
+                                                    "boost": 1
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "term": {
+                                                "file_key": {
+                                                    "value": "@file_key",
+                                                    "boost": 1
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "bool": {
+                                                "must_not": {
+                                                    "exists": {
+                                                        "field": "root_file_id"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "bool": {
+                                    "filter": [
+                                        {
+                                            "term": {
+                                                "root_file_id": {
+                                                    "value": "@root_file_id",
+                                                    "boost": 1
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ],
+                        "adjust_pure_negative": True,
+                        "boost": 1
+                    }
+                }
+            },
+            aggregated_fields=['country'],
+        )
+    },
+
+    'get-file-download-per-user-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            group_fields=['cur_user_id', 'count'],
+        )
+    },
+
+    'get-file-preview-per-user-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-preview'.format(search_index_prefix),
+            group_fields=['cur_user_id', 'count'],
+        )
+    },
+
+    'get-record-view-report': {
+        "cls": ESWekoTermsQuery,
+        "params": dict(
+            index='{}-stats-record-view'.format(search_index_prefix),
+            group_fields=['record_id', 'record_index_names',
+                        'cur_user_id', 'pid_value', 'record_name', 'count'],
+        )
+    },
+
+    'bucket-record-view-histogram': {
+        "cls": ESDateHistogramQuery,
+        "params": dict(
+            index='{}-stats-record-view'.format(search_index_prefix),
+            copy_fields=dict(
+                record_id='record_id',
+            ),
+            required_filters=dict(
+                record_id='record_id',
+            ),
+        )
+    },
+
+    'bucket-record-view-total': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-record-view'.format(search_index_prefix),
+            copy_fields=dict(
+                record_id='record_id',
+            ),
+            required_filters=dict(
+                record_id='record_id',
+            ),
+            metric_fields=dict(
+                count=('sum', 'count', {}),
+                unique_count=('sum', 'unique_count', {}),
+            ),
+            aggregated_fields=['country'],
+        )
+    },
+
+    'item-create-total': {
+        "cls": ESWekoTermsQuery,
+        "params": dict(
+            index='{}-stats-item-create'.format(search_index_prefix),
+            metric_fields=dict(
+                count=('sum', 'count', {}),
+            ),
+            aggregated_fields=['remote_addr', 'hostname', 'cur_user_id'],
+        )
+    },
+
+    'item-create-per-date': {
+        "cls": ESWekoTermsQuery,
+        "params": dict(
+            index='{}-stats-item-create'.format(search_index_prefix),
+            metric_fields=dict(
+                count=('sum', 'count', {}),
+            ),
+            aggregated_fields=['timestamp', 'pid_value', 'record_name'],
+        )
+    },
+
+    'item-create-histogram': {
+        "cls": ESDateHistogramQuery,
+        "params": dict(
+            index='{}-stats-item-create'.format(search_index_prefix),
+            aggregated_fields=['timestamp'],
+        )
+    },
+
+    'item-detail-total': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-record-view'.format(search_index_prefix),
+            metric_fields=dict(
+                count=('sum', 'count', {}),
+            ),
+            aggregated_fields=['remote_addr', 'hostname'],
+        )
+    },
+
+    'item-detail-item-total': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-record-view'.format(search_index_prefix),
+            metric_fields=dict(
+                count=('sum', 'count', {}),
+            ),
+            aggregated_fields=['pid_value', 'record_name'],
+        )
+    },
+
+    'bucket-item-detail-view-histogram': {
+        "cls": ESDateHistogramQuery,
+        "params": dict(
+            index='{}-stats-record-view'.format(search_index_prefix),
+            aggregated_fields=['timestamp'],
+        )
+    },
+
+    'get-file-download-per-host-report': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            metric_fields=dict(
+                count=('sum', 'count', {}),
+            ),
+            aggregated_fields=['remote_addr', 'hostname'],
+        )
+    },
+
+    'get-file-download-per-item-report': {
+        "cls": ESWekoTermsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            metric_fields=dict(
+                count=('sum', 'count', {}),
+            ),
+            aggregated_fields=['item_id', 'item_title'],
+        )
+    },
+
+    'get-file-download-per-time-report': {
+        "cls": ESDateHistogramQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            aggregated_fields=['timestamp'],
+        )
+    },
+
+    'top-view-total': {
+        "cls": ESDateHistogramQuery,
+        "params": dict(
+            index='{}-stats-top-view'.format(search_index_prefix),
+            aggregated_fields=['remote_addr', 'hostname']
+        )
+    },
+
+    'top-view-total-per-host': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-top-view'.format(search_index_prefix),
+            group_fields=['remote_addr', 'hostname', 'count']
+        )
+    },
+
+    'get-top-view-per-site-license': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-top-view'.format(search_index_prefix),
+            group_fields=['site_license_name', 'count'],
+        )
+    },
+
+    'get-record-view-per-site-license': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-record-view'.format(search_index_prefix),
+            group_fields=['site_license_name', 'count'],
+        )
+    },
+
+    'get-search-per-site-license': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-search'.format(search_index_prefix),
+            group_fields=['site_license_name', 'count'],
+        )
+    },
+
+    'get-file-download-per-site-license': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-download'.format(search_index_prefix),
+            group_fields=['site_license_name', 'count'],
+        )
+    },
+
+    'get-file-preview-per-site-license': {
+        "cls": ESTermsQuery,
+        "params": dict(
+            index='{}-stats-file-preview'.format(search_index_prefix),
+            group_fields=['site_license_name', 'count'],
+        )
+    },
+
+    'get-ranking-data': {
+        "cls": ESWekoRankingQuery,
+        "params": dict(
+            index='{}-stats-{}',
+            main_fields=['start_date', 'end_date', 'group_field', 'agg_size', 'count_field'],
+            metric_fields=dict(),
+            main_query={
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "must": [
+                            {
+                                "range": {
+                                    "timestamp": {
+                                        "gte": "@start_date",
+                                        "lte": "@end_date",
+                                        "time_zone": "@time_zone"
+                                    }
+                                }
+                            }
+                        ],
+                        "must_not": "@must_not"
+                    }
+                },
+                "aggs": {
+                    "my_buckets": {
+                        "terms": {
+                            "field": "@group_field",
+                            "size": "@agg_size",
+                            "order": {
+                                "my_sum": "desc" 
+                            }
+                        },
+                        "aggs": {
+                            "my_sum": {
+                                "sum": {
+                                    "field": "@count_field" 
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    },
+
+    'get-new-items-data': {
+        "cls": ESWekoRankingQuery,
+        "params": dict(
+            index='{}-weko',
+            main_fields=['start_date', 'end_date', 'agg_size'],
+            metric_fields=dict(),
+            main_query={
+                "size": "@agg_size",
+                "sort": [
+                    {
+                        "publish_date":{
+                            "order": "desc"
+                        }
+                    }
+                ],
+                "query":{
+                    "bool":{
+                        "must":[
+                            {
+                                "range": {
+                                    "publish_date": {
+                                        "gte": "@start_date",
+                                        "lte": "@end_date"
+                                    }
+                                }
+                            },
+                            {
+                                "term": {
+                                    "relation_version_is_last": True
+                                }
+                            },
+                            {
+                                "terms": {
+                                    "publish_status": [
+                                        PublishStatus.PUBLIC.value,
+                                        PublishStatus.PRIVATE.value
+                                    ]
+                                }
+                            }
+                        ],
+                        "must_not": "@must_not"
+                    }
+                }
+            }
+        )
+    },
+
+    'item-file-download-aggs': {
+        "cls": ESWekoFileRankingQuery,
+        "params": dict(
+            index='{}-events-stats-file-download'.format(search_index_prefix),
+            copy_fields=dict(),
+            metric_fields=dict(
+                download_ranking=('terms', 'file_key', {})
+            ),
+            main_fields=['item_id'],
+            main_query={
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {
+                                "term": {
+                                    "item_id": {
+                                        "value": "@item_id",
+                                        "boost": 1
+                                    }
+                                }
+                            },
+                            {
+                                "terms": {
+                                    "root_file_id": "@root_file_id_list"
+                                }
+                            }
+                        ]
+                    }
+                },
+                "size": 0
+            },
+        )
+    },
 }
 
 
