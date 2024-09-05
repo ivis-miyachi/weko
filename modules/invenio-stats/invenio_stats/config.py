@@ -26,6 +26,7 @@ from invenio_stats.contrib.event_builders import build_celery_task_unique_id, \
     copy_search_keyword, copy_search_type, copy_user_group_list
 from invenio_stats.aggregations import StatAggregator, filter_restricted
 from invenio_search import current_search_client
+from weko_schema_ui.models import PublishStatus
 
 STATS_REGISTER_RECEIVERS = True
 """Enable the registration of signal receivers.
