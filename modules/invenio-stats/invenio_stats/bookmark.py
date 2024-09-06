@@ -15,6 +15,8 @@ from functools import wraps
 from invenio_search.engine import dsl, search
 from invenio_search.utils import prefix_index
 
+from .models import StatsBookmark
+
 SUPPORTED_INTERVALS = OrderedDict(
     [
         ("hour", "%Y-%m-%dT%H"),
@@ -76,31 +78,28 @@ class BookmarkAPI(object):
     @_ensure_index_exists
     def set_bookmark(self, value):
         """Set bookmark for starting next aggregation."""
-        self.client.index(
-            index=self.bookmark_index,
-            body={"date": value, "aggregation_type": self.agg_type},
-        )
+        _id = self.agg_type
+        _source = {'date': value, 'aggregation_type': self.agg_type}
+        # if current_app.config['STATS_WEKO_DB_BACKUP_BOOKMARK']:
+        # Save stats bookmark into Database.
+        StatsBookmark.save(dict(
+            _id=_id,
+            _index=self.bookmark_index,
+            _type=self.doc_type,
+            _source=_source,
+        ), delete=True)
         self.new_timestamp = None
 
     @_ensure_index_exists
     def get_bookmark(self, refresh_time=60):
         """Get last aggregation date."""
-        # retrieve the oldest bookmark
-        query_bookmark = (
-            dsl.Search(using=self.client, index=self.bookmark_index)
-            .filter("term", aggregation_type=self.agg_type)
-            .sort({"date": {"order": "desc"}})
-            .extra(size=1)  # fetch one document only
-        )
-        bookmark = next(iter(query_bookmark.execute()), None)
-        if bookmark:
-            try:
-                my_date = datetime.fromisoformat(bookmark.date)
-            except ValueError:
-                # This one is for backwards compatibility, when the bookmark did not have the time
-                my_date = datetime.strptime(
-                    bookmark.date, SUPPORTED_INTERVALS[self.agg_interval]
-                )
+        db_bookmark = StatsBookmark.query.filter_by(
+            agg_type=self.name,
+            agg_interval=self.interval
+        ).order_by(StatsBookmark.date.desc()).first()
+
+        if db_bookmark:
+            my_date = db_bookmark.date
             # By default, the bookmark returns a slightly sooner date, to make sure that documents
             # that had arrived before the previous run and where not indexed by the engine are caught in this run
             # This means that some events might be processed twice

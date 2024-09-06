@@ -24,6 +24,7 @@ from flask import current_app
 from invenio_search import current_search_client
 from invenio_search.engine import dsl, search
 from invenio_search.utils import prefix_index
+from invenio_db import db
 
 from .models import StatsAggregation, StatsBookmark
 
@@ -409,6 +410,7 @@ class StatAggregator(object):
                 aggregation_data[self.field] = aggregation["key"]
                 aggregation_data["count"] = aggregation["doc_count"]
                 aggregation_data["updated_timestamp"] = datetime.utcnow().isoformat()
+                aggregation_data['event_type'] = self.event
 
                 if self.metric_fields:
                     for f in self.metric_fields:
@@ -485,7 +487,7 @@ class StatAggregator(object):
         return self.bookmark_api.list_bookmarks(start_date, end_date, limit)
 
     def delete(self, start_date=None, end_date=None):
-        """Delete aggregation documents."""
+        """Delete aggregation documents and bookmarks."""
         aggs_query = dsl.Search(
             using=self.client,
             index=self.index,
@@ -499,20 +501,8 @@ class StatAggregator(object):
         if range_args:
             aggs_query = aggs_query.filter("range", timestamp=range_args)
 
-        bookmarks_query = (
-            dsl.Search(
-                using=self.client,
-                index=self.bookmark_api.bookmark_index,
-            )
-            .filter("term", aggregation_type=self.name)
-            .sort({"date": {"order": "desc"}})
-        )
-
-        if range_args:
-            bookmarks_query = bookmarks_query.filter("range", date=range_args)
-
         def _delete_actions():
-            for query in (aggs_query, bookmarks_query):
+            for query in aggs_query:
                 affected_indices = set()
                 for doc in query.scan():
                     affected_indices.add(doc.meta.index)
@@ -525,4 +515,15 @@ class StatAggregator(object):
                     index=",".join(affected_indices), wait_if_ongoing=True
                 )
 
+        # Delete bookmarks
+        bookmark_query = StatsBookmark.query.filter_by(agg_type=self.name)
+        
+        if start_date:
+            bookmark_query = bookmark_query.filter(StatsBookmark.date >= start_date)
+        if end_date:
+            bookmark_query = bookmark_query.filter(StatsBookmark.date <= end_date)
+        
+        bookmark_query.delete(synchronize_session=False)
+
         search.helpers.bulk(self.client, _delete_actions(), refresh=True)
+        db.session.commit()
