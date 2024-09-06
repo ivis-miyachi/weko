@@ -502,7 +502,7 @@ class StatAggregator(object):
             aggs_query = aggs_query.filter("range", timestamp=range_args)
 
         def _delete_actions():
-            for query in (aggs_query, bookmarks_query):
+            for query in aggs_query:
                 affected_indices = set()
                 for doc in query.scan():
                     affected_indices.add(doc.meta.index)
