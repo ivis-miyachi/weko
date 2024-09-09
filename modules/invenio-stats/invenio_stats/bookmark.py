@@ -11,6 +11,7 @@
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from functools import wraps
+import json
 
 from invenio_search.engine import dsl, search
 from invenio_search.utils import prefix_index
@@ -93,13 +94,19 @@ class BookmarkAPI(object):
     @_ensure_index_exists
     def get_bookmark(self, refresh_time=60):
         """Get last aggregation date."""
-        db_bookmark = StatsBookmark.query.filter_by(
-            agg_type=self.name,
-            agg_interval=self.interval
+        db_bookmark = StatsBookmark.get_by_source_id(
+            source_id= self.agg_type
         ).order_by(StatsBookmark.date.desc()).first()
 
         if db_bookmark:
-            my_date = db_bookmark.date
+            try:
+                source_data = json.loads(db_bookmark.source)
+                my_date = datetime.fromisoformat(source_data['date'])
+            except ValueError:
+                # This one is for backwards compatibility, when the bookmark did not have the time
+                my_date = datetime.strptime(
+                    db_bookmark.date, SUPPORTED_INTERVALS[self.agg_interval]
+                )
             # By default, the bookmark returns a slightly sooner date, to make sure that documents
             # that had arrived before the previous run and where not indexed by the engine are caught in this run
             # This means that some events might be processed twice
