@@ -96,16 +96,16 @@ class BookmarkAPI(object):
         """Get last aggregation date."""
         db_bookmark = StatsBookmark.get_by_source_id(
             source_id= self.agg_type
-        ).order_by(StatsBookmark.date.desc()).first()
+        )
 
         if db_bookmark:
+            source_date = json.loads(db_bookmark.source)['date']
             try:
-                source_data = json.loads(db_bookmark.source)
-                my_date = datetime.fromisoformat(source_data['date'])
+                my_date = datetime.fromisoformat(source_date)
             except ValueError:
                 # This one is for backwards compatibility, when the bookmark did not have the time
                 my_date = datetime.strptime(
-                    db_bookmark.date, SUPPORTED_INTERVALS[self.agg_interval]
+                    source_date.date, SUPPORTED_INTERVALS[self.agg_interval]
                 )
             # By default, the bookmark returns a slightly sooner date, to make sure that documents
             # that had arrived before the previous run and where not indexed by the engine are caught in this run
