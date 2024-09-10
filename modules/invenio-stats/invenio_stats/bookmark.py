@@ -105,7 +105,7 @@ class BookmarkAPI(object):
             except ValueError:
                 # This one is for backwards compatibility, when the bookmark did not have the time
                 my_date = datetime.strptime(
-                    source_date.date, SUPPORTED_INTERVALS[self.agg_interval]
+                    source_date, SUPPORTED_INTERVALS[self.agg_interval]
                 )
             # By default, the bookmark returns a slightly sooner date, to make sure that documents
             # that had arrived before the previous run and where not indexed by the engine are caught in this run
