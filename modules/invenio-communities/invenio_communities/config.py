@@ -152,8 +152,10 @@ COMMUNITIES_ALLOWED_ATTRS = {
 COMMUNITIES_LIMITED_ROLE_ACCESS_PERMIT = 2
 """Allowed Role's id higher than this number full access to list Indexes."""
 
-COMMUNITIES_USER_CONFIRMED_SINCE = timedelta(days=7)
-"""Set the minimum account verification time for creating a community."""
-
-COMMUNITIES_CAN_CREATE = can_user_create_community
-"""Permission check function for community creation."""
+COMMUNITIES_DEFAULT_PROPERTIES = {
+    'title1': 'Communities',
+    'title2': 'コミュニティ',
+    'icon_code': 'fa fa-group',
+    'supplement': 'created and curated by WEKO3 users'
+}
+"""Communities Page Default Properties."""

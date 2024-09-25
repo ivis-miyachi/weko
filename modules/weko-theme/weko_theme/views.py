@@ -31,6 +31,7 @@ from invenio_db import db
 from weko_admin.models import SiteInfo
 from weko_admin.utils import get_search_setting
 from weko_records_ui.ipaddr import check_site_license_permission
+from weko_admin.models import AdminSettings
 
 from .utils import MainScreenInitDisplaySetting, get_design_layout, \
     get_weko_contents, has_widget_design
@@ -50,7 +51,7 @@ blueprint = Blueprint(
 def index():
     """Simplistic front page view."""
     check_site_license_permission()
-    
+
     send_info = {}
     send_info['site_license_flag'] = True \
         if hasattr(current_user, 'site_license_flag') else False
@@ -66,14 +67,44 @@ def index():
         current_app.config['WEKO_THEME_DEFAULT_COMMUNITY'],
         current_i18n.language)
     page = None
-    
+
+    lang = get_language()
+
+    settings = AdminSettings.get('community_settings')
+
+    default_properties = current_app.config['WEKO_COMMUNITIES_DEFAULT_PROPERTIES']
+
+    title = default_properties['title2'] if lang == 'ja' else default_properties['title1']
+    title_en = default_properties['title1']
+
+    lists = {
+        'title': title,
+        'title_en':title_en,
+        'icon_code': default_properties['icon_code'],
+        'supplement': default_properties['supplement']
+    }
+
+    if settings:
+        if lang == 'ja':
+            lists['title'] = settings.title2 if settings.title2 != '' else settings.title1
+        else:
+            lists['title'] = settings.title1
+        lists['title_en'] = settings.title1
+
+        lists['icon_code'] = settings.icon_code if settings.icon_code and settings.icon_code != '' else default_properties['icon_code']
+
+        lists['supplement'] = settings.supplement if settings.supplement and settings.supplement != '' else default_properties['supplement']
 
     return render_template(
         current_app.config['THEME_FRONTPAGE_TEMPLATE'],
         page=page,
         render_widgets=render_widgets,
         render_header_footer=render_header_footer,
+        lists = lists,
         **get_weko_contents(request.args))
+
+def get_language():
+    return current_i18n.language
 
 
 @blueprint.route('/edit')
@@ -117,7 +148,7 @@ def get_site_info(site_info):
         addthis_user_id = site_info.addthis_user_id if site_info.addthis_user_id else current_app.config['ADDTHIS_USER_ID']
     except BaseException:
         addthis_user_id = ""
-    
+
     title = get_site_name_for_current_language(site_name) \
         or current_app.config['THEME_SITENAME']
     login_instructions = get_notify_for_current_language(notify)

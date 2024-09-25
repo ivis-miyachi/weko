@@ -1,6 +1,6 @@
 
 from flask import make_response,render_template,url_for
-from mock import patch
+from mock import patch, MagicMock
 from weko_index_tree.models import Index
 from invenio_accounts.testutils import create_test_user
 from invenio_communities.models import Community
@@ -11,10 +11,10 @@ from invenio_communities.views.ui import (
     dbsession_clean
 )
 
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 
 # def sanitize_html(value):
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_sanitize_html -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_sanitize_html -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_sanitize_html(app):
     text = '<script><a href="https://google.com"><p>test_url</p></a></script>'
     result = app.jinja_env.filters["sanitize_html"](text)
@@ -22,20 +22,20 @@ def test_sanitize_html(app):
 
 
 # def pass_community(f):
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_pass_community -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_pass_community -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_pass_community(app,db,communities,mocker):
     result = pass_community(lambda x:x)(community_id="comm1")
     assert result.id == "comm1"
-    
+
     mock_abort = mocker.patch("invenio_communities.views.ui.abort",return_value=make_response())
     result = pass_community(lambda x:x)(community_id="not_exist_comm")
     mock_abort.assert_called_with(404)
 
 
 # def permission_required(action):
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_permission_required -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_permission_required -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_permission_required(app,db,users,mocker):
-   
+
     index = Index()
     db.session.add(index)
     db.session.commit()
@@ -44,7 +44,7 @@ def test_permission_required(app,db,users,mocker):
                              description='Description1',
                              root_node_id=1)
     db.session.commit()
-    
+
     with app.test_client() as client:
         with patch("flask_login.utils._get_user", return_value=users[2]["obj"]):
             client.get("/")
@@ -58,7 +58,7 @@ def test_permission_required(app,db,users,mocker):
             mock_abort.assert_called_with(403)
 
 # def format_item(item, template, name='item'):
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_format_item -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_format_item -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_format_item(app,mocker):
     template_value = app.jinja_env.from_string("test_value: {{ name }}")
     mocker.patch("invenio_communities.utils.current_app.jinja_env.get_or_select_template",return_value=template_value)
@@ -67,9 +67,9 @@ def test_format_item(app,mocker):
     name = "name"
     result = app.jinja_env.filters["format_item"](item,template,name)
     assert result == "test_value: test_item"
-    
+
 # def mycommunities_ctx():
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_mycommunities_ctx -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_mycommunities_ctx -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_mycommunities_ctx(app,db,users):
     index = Index()
     db.session.add(index)
@@ -86,7 +86,7 @@ def test_mycommunities_ctx(app,db,users):
 
 # def index():
 # def view(community):
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_view -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_view -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_view(client,app,db,communities,mocker):
     app.config.update(
         WEKO_INDEX_TREE_STYLE_OPTIONS={
@@ -127,7 +127,7 @@ def test_view(client,app,db,communities,mocker):
     assert kwargs["community"].id == "comm1"
     assert kwargs["display_facet_search"] == False
     assert kwargs["display_index_tree"] == True
-    
+
     url = url_for("invenio_communities.view",community_id="comm1",view="weko")
     mock_render = mocker.patch("invenio_communities.views.ui.render_template",return_value=make_response())
     res = client.get(url)
@@ -149,7 +149,7 @@ def test_view(client,app,db,communities,mocker):
 # # def about(community):
 
 # def generic_item(community, template, **extra_ctx):
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_generic_item -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_generic_item -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_generic_item(app,db,users,mocker):
     index = Index()
     db.session.add(index)
@@ -163,20 +163,20 @@ def test_generic_item(app,db,users,mocker):
         mock_render = mocker.patch("invenio_communities.views.ui.render_template",return_value=make_response())
         result = generic_item(community,"test_template.html")
         args,kwargs = mock_render.call_args
-        
+
         assert args[0] == "test_template.html"
         assert kwargs["mycommunities"][0].id == "comm1"
         assert kwargs["is_owner"] == True
         assert kwargs["community"].id == "comm1"
         assert kwargs["detail"] == True
-        
+
 # # def new():
 # # def edit(community):
 # #    def read_color(scss_file, community):
 # # def delete(community):
 # # def curate(community):
 # def community_list():
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_community_list -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_community_list -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_community_list(client,app,db,users,mocker):
     index = Index()
     db.session.add(index)
@@ -209,8 +209,95 @@ def test_community_list(client,app,db,users,mocker):
         assert kwargs["featured_community"] == None
         assert kwargs["display_community"] == False
 
+class Dict2Obj:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+# def community_list():
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_community_list_settings -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
+def test_community_list_settings(client,app,users):
+    url = url_for("invenio_communities.community_list")
+    app.config.update(
+        WEKO_THEME_DEFAULT_COMMUNITY="Root Index"
+    )
+    # AdminSettings.getをモックし、DBからの設定を返す
+    db_settings = Dict2Obj(
+        title1='DB Title 1',
+        title2='DB タイトル 2',
+        icon_code='fa fa-handshake-o',
+        supplement='Database supplement text'
+    )
+    with patch("weko_admin.admin.AdminSettings.get", return_value=db_settings):
+        # get_languageをモックする
+        with patch("invenio_communities.views.ui.get_language", return_value='en'):
+            # render_template をモックし、引数をキャプチャする
+            mock_render_template = MagicMock(return_value=('<html></html>', 200))
+            with patch("invenio_communities.views.ui.render_template", mock_render_template):
+                res = client.get(url)
+                assert res.status_code == 200
+                # モックされた render_template の引数を検証
+                kwargs = mock_render_template.call_args[1]
+                assert kwargs['lists']['title'] == db_settings.title1
+                assert kwargs['lists']['icon_code'] == db_settings.icon_code
+                assert kwargs['lists']['supplement'] == db_settings.supplement
+        # get_languageをモックする
+        with patch("invenio_communities.views.ui.get_language", return_value='ja'):
+            # render_template をモックし、引数をキャプチャする
+            mock_render_template = MagicMock(return_value=('<html></html>', 200))
+            with patch("invenio_communities.views.ui.render_template", mock_render_template):
+                res = client.get(url)
+                assert res.status_code == 200
+                # モックされた render_template の引数を検証
+                kwargs = mock_render_template.call_args[1]
+                assert kwargs['lists']['title'] == db_settings.title2
+                assert kwargs['lists']['icon_code'] == db_settings.icon_code
+                assert kwargs['lists']['supplement'] == db_settings.supplement
+
+    with patch("weko_admin.admin.AdminSettings.get", return_value=None):
+        with patch("invenio_communities.views.ui.get_language", return_value='en'):
+            # render_template をモックし、引数をキャプチャする
+            mock_render_template = MagicMock(return_value=('<html></html>', 200))
+            with patch("invenio_communities.views.ui.render_template", mock_render_template):
+                res = client.get(url)
+                assert res.status_code == 200
+                # モックされた render_template の引数を検証
+                kwargs = mock_render_template.call_args[1]
+                assert kwargs["lists"]["title"] == 'Communities'  # 英語ならconfigから英語のデフォルト値を使用
+                assert kwargs["lists"]["icon_code"] == 'fa fa-group'
+                assert kwargs["lists"]["supplement"] == 'created and curated by WEKO3 users'
+        with patch("invenio_communities.views.ui.get_language", return_value='ja'):
+            # render_template をモックし、引数をキャプチャする
+            mock_render_template = MagicMock(return_value=('<html></html>', 200))
+            with patch("invenio_communities.views.ui.render_template", mock_render_template):
+                res = client.get(url)
+                assert res.status_code == 200
+                # モックされた render_template の引数を検証
+                kwargs = mock_render_template.call_args[1]
+                assert kwargs["lists"]["title"] == 'コミュニティ'  # 日本語ならconfigから英語のデフォルト値を使用
+                assert kwargs["lists"]["icon_code"] == 'fa fa-group'
+                assert kwargs["lists"]["supplement"] == 'created and curated by WEKO3 users'
+
+    # AdminSettings.getをモックし、DBからの設定を返す
+    db_settings = Dict2Obj(
+        title1='DB Title 1',
+        title2='',
+        icon_code='fa fa-handshake-o',
+        supplement='Database supplement text'
+    )
+    with patch("weko_admin.admin.AdminSettings.get", return_value=db_settings):
+        # get_languageをモックする
+        with patch("invenio_communities.views.ui.get_language", return_value='ja'):
+            # render_template をモックし、引数をキャプチャする
+            mock_render_template = MagicMock(return_value=('<html></html>', 200))
+            with patch("invenio_communities.views.ui.render_template", mock_render_template):
+                res = client.get(url)
+                assert res.status_code == 200
+                # モックされた render_template の引数を検証
+                kwargs = mock_render_template.call_args[1]
+                assert kwargs['lists']['title'] == db_settings.title1 # title2が未設定かつ言語が日本語の場合、title1を使用
+
 # def dbsession_clean(exception):
-# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_dbsession_clean -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp    
+# .tox/c1/bin/pytest --cov=invenio_communities tests/test_views_ui.py::test_dbsession_clean -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
 def test_dbsession_clean(app, db):
     user = create_test_user(email='test@test.org')
     user1 = db.session.merge(user)
