@@ -28,6 +28,15 @@ for index in indexes_alias:
 #version = "os-v2"
 version="v6"
 mapping_files = {
+    "deposits-deposit-v1.0.0": ("invenio_deposit", f"mappings/{version}/deposits/deposit-v1.0.0.json"),
+    "authors-author-v1.0.0": ("weko_authors", f"mappings/{version}/authors/author-v1.0.0.json"),
+    "weko-item-v1.0.0": ("weko_schema_ui", f"mappings/{version}/weko/item-v1.0.0.json"),
+    "marc21-holdings-hd-v1.0.0": ("invenio_marc21", f"mappings/{version}/marc21/holdings/hd-v1.0.0.json"),
+    "marc21-authority-ad-v1.0.0": ("invenio_marc21",f"mappings/{version}/marc21/authority/ad-v1.0.0.json"),
+    "marc21-bibliographic-bd-v1.0.0": ("invenio_marc21", f"mappings/{version}/marc21/bibliographic/bd-v1.0.0.json"),
+}
+
+template_files = {
     "events-stats-celery-task": ("invenio_stats", f"contrib/celery_task/{version}/celery-task-v1.json"),
     "events-stats-file-download": ("invenio_stats", f"contrib/file_download/{version}/file-download-v1.json"),
     "events-stats-file-preview": ("invenio_stats", f"contrib/file_preview/{version}/file-preview-v1.json"),
@@ -42,14 +51,10 @@ mapping_files = {
     "stats-record-view": ("invenio_stats", f"contrib/aggregations/aggr_record_view/{version}/aggr-record-view-v1.json"),
     "stats-search": ("invenio_stats", f"contrib/aggregations/aggr_search/{version}/aggr-search-v1.json"),
     "stats-top-view": ("invenio_stats", f"contrib/aggregations/aggr_top_view/{version}/aggr-top-view-v1.json"),
-    "deposits-deposit-v1.0.0": ("invenio_deposit", f"mappings/{version}/deposits/deposit-v1.0.0.json"),
-    "authors-author-v1.0.0": ("weko_authors", f"mappings/{version}/authors/author-v1.0.0.json"),
-    "weko-item-v1.0.0": ("weko_schema_ui", f"mappings/{version}/weko/item-v1.0.0.json"),
-    "marc21-holdings-hd-v1.0.0": ("invenio_marc21", f"mappings/{version}/marc21/holdings/hd-v1.0.0.json"),
-    "marc21-authority-ad-v1.0.0": ("invenio_marc21",f"mappings/{version}/marc21/authority/ad-v1.0.0.json"),
-    "marc21-bibliographic-bd-v1.0.0": ("invenio_marc21", f"mappings/{version}/marc21/bibliographic/bd-v1.0.0.json"),
 }
+
 mappings = {}
+templates = {}
 # ファイルからマッピングデータを取得
 print("# get mapping from json file")
 for index in indexes:
@@ -73,10 +78,17 @@ for index in indexes:
             }
         }
         continue
-    if index_tmp not in mapping_files:
+    if index_tmp not in mapping_files.keys()+template_files.keys():
         print("## not exists: {}".format(index, index_tmp))
         continue
-    path_data = mapping_files[index_tmp]
+    mapping_type=""
+    if index_tmp in mapping_files:
+        mapping_file_datas = mapping_files
+        mapping_type="mapping"
+    else:
+        mapping_file_datas = template_files
+        mapping_type="templates"
+    path_data = mapping_file_datas[index_tmp]
     module_name = path_data[0]
     try:
         res = import_module(module_name)
@@ -91,11 +103,15 @@ for index in indexes:
         continue
 
     with open(file_path, "r") as json_file:
-        mappings[index] = json.loads(json_file.read())
+        if mapping_type == "mapping":
+            mappings[index] = json.loads(json_file.read())
+        if mapping_type == "templates":
+            templates[index] = json.loads(json_file.read())
 
 #base_url = "https://"+host +":9200/"
 base_url = "http://"+host +":9200/"
 reindex_url = base_url + "_reindex?pretty&refresh=true&wait_for_completion=true"
+template_url = base_url + "_index_template/{}"
 auth = HTTPBasicAuth("admin","admin")
 verify=False
 headers = {"Content-Type":"application/json"}
@@ -108,7 +124,10 @@ for index in indexes:
     is_weko_item = index.replace(os.environ.get('SEARCH_INDEX_PREFIX')+"-","") == "weko-item-v1.0.0"
     
     # target index mapping
-    base_index_definition = mappings[index]
+    if index in mappings:
+        base_index_definition = mappings[index]
+    elif index in templates:
+        base_index_definition = templates[index]
     
     # create speed up setting body
     defalut_number_of_replicas = base_index_definition.get("settings",{}).get("index",{}).get("number_of_replicas",1)
@@ -132,8 +151,14 @@ for index in indexes:
 
     try:
         # 一時保存用インデックス作成
-        #res = requests.put(base_url+tmpindex+"?pretty",headers=headers,json=base_index_definition,auth=auth,verify=verify)
-        res = requests.put(base_url+tmpindex+"?pretty",headers=headers,json=base_index_definition)
+        if index in mappings:
+            #res = requests.put(base_url+tmpindex+"?pretty",headers=headers,json=base_index_definition,auth=auth,verify=verify)
+            res = requests.put(base_url+tmpindex+"?pretty",headers=headers,json=base_index_definition)
+        elif index in templates:
+            template_url.format(index+"/"+version)
+            res = requests.put(template_url,headers=headers,json=base_index_definition)
+            res = requests.put(base_url+tmpindex+"?pretty",headers=headers)
+            
         if res.status_code!=200:
             raise Exception(res.text)
         
@@ -166,10 +191,15 @@ for index in indexes:
         print("## delete old index")
         
         # 新しくインデックス作成
-        #res = requests.put(url=base_url+index+"?pretty",headers=headers,json=base_index_definition,auth=auth,verify=verify)
-        res = requests.put(url=base_url+index+"?pretty",headers=headers,json=base_index_definition)
-        if res.status_code!=200:
-            raise Exception(res.text)
+        
+        if index in mappings:
+            #res = requests.put(base_url+tmpindex+"?pretty",headers=headers,json=base_index_definition,auth=auth,verify=verify)
+            res = requests.put(base_url+index+"?pretty",headers=headers,json=base_index_definition)
+        elif index in templates:
+            template_url.format(index+"/"+version)
+            res = requests.put(template_url,headers=headers,json=base_index_definition)
+            res = requests.put(base_url+index+"?pretty",headers=headers)
+
         if is_weko_item:
             #res = requests.put(base_url+tmpindex+"/_mapping",headers=headers,json=percolator_body,auth=auth,verify=verify)
             res = requests.put(base_url+tmpindex+"/_mapping/item-v1.0.0",headers=headers,json=percolator_body)
