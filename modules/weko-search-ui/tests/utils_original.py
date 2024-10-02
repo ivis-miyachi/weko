@@ -46,7 +46,7 @@ from weko_search_ui.config import (
 
 from unittest.mock import patch, Mock, MagicMock
 from weko_search_ui import WekoSearchUI
-from flask_babelex import Babel
+from flask_babel import Babel
 import copy
 
 FIXTURE_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data")

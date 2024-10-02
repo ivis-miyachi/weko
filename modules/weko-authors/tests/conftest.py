@@ -291,6 +291,7 @@ from invenio_search import current_search_client
 @pytest.fixture()
 def esindex(app):
     current_search_client.indices.delete(index='test-*')
+    print("complete delete index")
     with open("tests/mock_module/mapping/os-v2/authors/author-v1.0.0.json","r") as f:
         mapping_author = json.load(f)
     with open("tests/mock_module/mapping/os-v2/records/item-v1.0.0.json","r") as f:

@@ -6,7 +6,7 @@ import unittest
 from mock import patch, MagicMock, Mock
 from flask import current_app, make_response, request
 from flask_login import current_user
-from flask_babelex import Babel
+from flask_babel import Babel
 
 from weko_search_ui.ext import WekoSearchUI, WekoSearchREST
 
@@ -21,7 +21,7 @@ def test_WekoSearchUI_2(i18n_app, app):
     test = WekoSearchUI(app)
     assert test
 
-
+# .tox/c1/bin/pytest --cov=weko_search_ui tests/test_ext.py::test_WekoSearchREST -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-search-ui/.tox/c1/tmp
 # class WekoSearchREST
 def test_WekoSearchREST(i18n_app):
     test = WekoSearchREST(i18n_app)

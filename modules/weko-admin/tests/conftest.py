@@ -58,7 +58,7 @@ from invenio_i18n import InvenioI18N
 from invenio_mail.models import MailConfig
 from invenio_pidrelations import InvenioPIDRelations
 from invenio_pidstore import InvenioPIDStore
-from invenio_search import RecordsSearch,InvenioSearch
+from invenio_search import RecordsSearch,InvenioSearch, current_search_client
 from invenio_oaiserver.ext import InvenioOAIServer
 from invenio_records.ext import InvenioRecords
 from invenio_records.models import RecordMetadata
@@ -122,16 +122,16 @@ def cache_config():
 @pytest.fixture()
 def base_app(instance_path, cache_config,request ,search_class):
     """Flask application fixture."""
-    os.environ['INVENIO_ELASTICSEARCH_HOST']='elasticsearch_test'
+    #os.environ['INVENIO_ELASTICSEARCH_HOST']='elasticsearch_test'
     app_ = Flask('test_weko_admin_app', instance_path=instance_path)
     app_.config.update(
         SERVER_NAME='test_server',
         ACCOUNTS_USE_CELERY=False,
         SECRET_KEY='SECRET_KEY',
-        SQLALCHEMY_DATABASE_URI=os.environ.get(
-             'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
-        #SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
-        #                                   'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
+        #SQLALCHEMY_DATABASE_URI=os.environ.get(
+        #     'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
+        SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
+                                           'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
         SEARCH_ELASTIC_HOSTS=os.environ.get(
             'SEARCH_ELASTIC_HOSTS', 'opensearch'),
         SEARCH_HOSTS=os.environ.get(
@@ -191,7 +191,7 @@ def base_app(instance_path, cache_config,request ,search_class):
     WekoSearchUI(app_)
     WekoSchemaUI(app_)
     search = InvenioSearch(app_)
-    search.register_mappings(search_class.Meta.index, 'tests.mock_module.mappings')
+    #search.register_mappings(search_class.Meta.index, 'tests.mock_module.mappings')
     InvenioIndexer(app_)
     InvenioRecords(app_)
     InvenioOAIServer(app_)
@@ -286,6 +286,19 @@ def admin_db(admin_app):
     yield db_
     db_.session.remove()
     db_.drop_all()
+
+@pytest.fixture()
+def esindex(app):
+    current_search_client.indices.delete(index="test-*")
+    with open("tests/data/mapping/os-v2/weko/item-v1.0.0.json") as f:
+        mapping = json.load(f)
+    with app.test_request_context():
+        current_search_client.indices.create(index=app.config["INDEXER_DEFAULT_INDEX"], body={"mappings":mapping})
+
+    yield current_search_client
+    
+    with app.test_request_context():
+        current_search_client.indices.delete(index="test-*")
 
 @pytest.fixture
 def script_info(app):

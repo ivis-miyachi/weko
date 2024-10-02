@@ -59,7 +59,8 @@ from weko_admin.utils import (
     get_facet_search_query,
     get_title_facets,
     is_exits_facet,
-    overwrite_the_memory_config_with_db
+    overwrite_the_memory_config_with_db,
+    elasticsearch_reindex
 )
 
 from tests.helpers import json_data
@@ -2273,3 +2274,13 @@ def test_get_title_facets(i18n_app, users, facet_search_settings):
         assert uiTypes
         assert isOpens
         assert displayNumbers
+
+# .tox/c1/bin/pytest --cov=weko_admin tests/test_utils.py::test_elasticsearch_reindex -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
+def test_elasticsearch_reindex(app, esindex):
+    esindex.index(
+        index=app.config["INDEXER_DEFAULT_INDEX"],
+        id="1",
+        body={"path":["1"],"item_type_id":"1","publish_status":"0","title":["test_title"]}
+    )
+    result = elasticsearch_reindex(False)
+    assert result == "complete"

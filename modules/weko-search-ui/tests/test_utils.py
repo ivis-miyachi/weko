@@ -11,7 +11,7 @@ from elasticsearch import NotFoundError
 
 import pytest
 from flask import current_app, make_response, request
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_login import current_user
 from invenio_i18n.babel import set_locale
 from invenio_records.api import Record

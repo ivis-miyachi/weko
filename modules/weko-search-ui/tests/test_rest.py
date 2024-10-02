@@ -5,13 +5,11 @@ import json
 import pytest
 from mock import patch, MagicMock
 from flask import Response, current_app
-from flask_babelex import get_locale
-from elasticsearch_dsl import response, Search
-from elasticsearch.exceptions import ElasticsearchException
+from flask_babel import get_locale
+from invenio_search.engine import dsl
+from invenio_search.engine import search
 from tests.conftest import json_data
 
-from invenio_records_rest.errors import MaxResultWindowRESTError
-from invenio_rest import ContentNegotiatedMethodView
 
 from weko_records.api import ItemTypes
 from weko_search_ui.rest import create_blueprint, IndexSearchResource, get_heading_info
@@ -121,7 +119,7 @@ def test_IndexSearchResource_get_Exception(client_rest, db, users, item_type, db
     def dummy_response(data):
         if isinstance(data, str):
             data = json_data(data)
-        dummy=response.Response(Search(), data)
+        dummy=dsl.response.Response(dsl.Search(), data)
         return dummy
     facet = json_data("data/search/facet.json")
     links = {"self":"?page=1&size=20"}
@@ -145,6 +143,7 @@ def test_IndexSearchResource_get_MaxResultWindowRESTError(client_rest,db_registe
         res =  client_rest.get(url("/index/", param))
         assert res.status_code == 400
 
+# .tox/c1/bin/pytest --cov=weko_search_ui tests/test_rest.py::test_create_blueprint -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-search-ui/.tox/c1/tmp
 # def create_blueprint(app, endpoints):
 def test_create_blueprint(i18n_app, app, users):
     with patch("flask_login.utils._get_user", return_value=users[3]['obj']):
@@ -181,7 +180,10 @@ def test_IndexSearchResource_get(i18n_app, users, client_request_args):
                 def to_dict():
                     dict_1 = {
                         "hits": {
-                            "total": total_hit_count,
+                            "total": {
+                                "value":total_hit_count,
+                                "relation":"eq"
+                            },
                             "hits": [{
                                 "_source": {
                                     "title": [1],
@@ -214,7 +216,7 @@ def test_IndexSearchResource_get(i18n_app, users, client_request_args):
 
                 data_3 = MagicMock()
                 data_3.hits = MagicMock()
-                data_3.hits.total = 30
+                data_3.hits.total.value = 30
                 data_3.to_dict = to_dict
 
                 return data_3
@@ -250,14 +252,14 @@ def test_IndexSearchResource_get(i18n_app, users, client_request_args):
             with patch("weko_index_tree.api.Indexes.get_self_list", return_value=[return_data_1]):
                 assert isinstance(test.get(), tuple)
                 assert isinstance(test.get()[1], dict)
-                assert test.get()[1]["hits"]["total"] == total_hit_count
+                assert test.get()[1]["hits"]["total"]["value"] == total_hit_count
                 assert test.get()[2]["self"] == top_page
                 assert test.get()[2]["next"] == next_page
 
             with patch("weko_index_tree.api.Indexes.get_self_list", return_value=[return_data_2]):
                 assert isinstance(test.get(), tuple)
                 assert isinstance(test.get()[1], dict)
-                assert test.get()[1]["hits"]["total"] == total_hit_count
+                assert test.get()[1]["hits"]["total"]["value"] == total_hit_count
                 assert test.get()[2]["self"] == top_page
                 assert test.get()[2]["next"] == next_page
 
@@ -373,7 +375,7 @@ def test_IndexSearchResourceAPI_error(client_rest, db_register2, db_rocrate_mapp
     res = client_rest.get(url('/v1/records', param))
     assert res.status_code == 400
 
-    with patch('invenio_search.api.RecordsSearch.execute', side_effect=ElasticsearchException()):
+    with patch('invenio_search.api.RecordsSearch.execute', side_effect=search.OpenSearchException()):
         res = client_rest.get(url('/v1/records'))
         assert res.status_code == 500
 
