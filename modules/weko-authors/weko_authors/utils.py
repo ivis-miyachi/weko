@@ -89,7 +89,7 @@ def check_email_existed(email: str):
         index=current_app.config['WEKO_AUTHORS_ES_INDEX_NAME'],
         body=body
     )
-
+    print(result)
     if len(result['hits']['hits']) > 0:
         return {
             'email': email,
@@ -604,13 +604,13 @@ def get_count_item_link(pk_id):
     query_q = {
         "query": {"term": {"author_link.raw": pk_id}},
         "_source": ["control_number"],
-        "track_total_hits": False
+        "track_total_hits": True
     }
     result_itemCnt = RecordIndexer().client.search(
         index=current_app.config['SEARCH_UI_SEARCH_INDEX'],
         body=query_q
     )
-
+    print(result_itemCnt)
     if result_itemCnt \
             and 'hits' in result_itemCnt \
             and 'total' in result_itemCnt['hits'] \

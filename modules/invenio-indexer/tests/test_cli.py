@@ -39,6 +39,7 @@ def test_run(app):
 def test_reindex(app):
     """Test reindex."""
     # load records
+    print(app.config.get("SEARCH_CLIENT_CONFIG"))
     with app.test_request_context():
         runner = app.test_cli_runner()
 
@@ -70,6 +71,7 @@ def test_reindex(app):
 
         # Initialize queue
         res = runner.invoke(cli.queue, ["init", "purge"])
+        print(res.output)
         assert 0 == res.exit_code
 
         res = runner.invoke(cli.reindex, ["--yes-i-know", "-t", "recid"])

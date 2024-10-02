@@ -22,8 +22,8 @@ from six import BytesIO
 import pytest
 from flask import Flask
 from flask_babel import Babel
-from elasticsearch import Elasticsearch
-from elasticsearch_dsl import response, Search
+#from elasticsearch import Elasticsearch
+#from elasticsearch_dsl import response, Search
 from sqlalchemy_utils.functions import create_database, database_exists
 from kombu import Exchange, Queue
 from flask import appcontext_pushed, g
@@ -235,7 +235,11 @@ def base_app(instance_path, mock_gethostbyaddr):
         SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
                                            'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
         SEARCH_ELASTIC_HOSTS=os.environ.get(
-            'SEARCH_ELASTIC_HOSTS', 'elasticsearch'),
+            'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST','opensearch'
+        ),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         SQLALCHEMY_TRACK_MODIFICATIONS=True,
         TESTING=True,
         OAUTH2SERVER_CLIENT_ID_SALT_LEN=64,
@@ -501,7 +505,7 @@ def es(app):
     """
     current_search_client.indices.delete(index='test-*')
     # events
-    with open("invenio_stats/contrib/events/v7/events-v1.json", "r") as f:
+    with open("invenio_stats/contrib/events/os-v2/events-v1.json", "r") as f:
         item_create_mapping = json.load(f)
         if "index_patterns" in item_create_mapping:
             del item_create_mapping["index_patterns"]
@@ -512,7 +516,7 @@ def es(app):
         body=item_create_mapping
         )
     # aggregations
-    with open("invenio_stats/contrib/aggregations/v7/aggregation-v1.json", "r") as f:
+    with open("invenio_stats/contrib/aggregations/os-v2/aggregation-v1.json", "r") as f:
         aggr_item_create_mapping = json.load(f)
         if "index_patterns" in aggr_item_create_mapping:
             del aggr_item_create_mapping["index_patterns"]

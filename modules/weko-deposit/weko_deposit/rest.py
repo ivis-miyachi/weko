@@ -41,7 +41,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from weko_records.errors import WekoRecordsError
 from weko_redis.errors import WekoRedisError
 from weko_redis.redis import RedisConnection
-from weko_workflow.api import WorkActivity
+
 from weko_workflow.errors import WekoWorkflowError
 
 from .api import WekoDeposit, WekoRecord
@@ -313,7 +313,7 @@ class ItemResource(ContentNegotiatedMethodView):
                             upgrade_record.model)
                         _upgrade_record.merge_data_to_record_without_version(
                             cur_pid)
-
+                    from weko_workflow.api import WorkActivity
                     activity = WorkActivity()
                     wf_activity = activity.get_workflow_activity_by_item_id(
                         cur_pid.object_uuid)

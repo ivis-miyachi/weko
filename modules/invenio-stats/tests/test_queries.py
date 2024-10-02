@@ -158,7 +158,7 @@ def test_date_histogram_query(i18n_app, queries_config):
                          [(["tests/data/ESTermsQuery_execute01.json"],
                            1,
                            "tests/data/ESTermsQuery_result01.json"),
-                          (["tests/data/ESTermsQuery_execute02.json", 
+                          (["tests/data/ESTermsQuery_execute02.json",
                             "tests/data/ESTermsQuery_execute01.json"],
                            1,
                            "tests/data/ESTermsQuery_result02.json"),
@@ -180,11 +180,35 @@ def test_terms_query(i18n_app,mock_es_execute, event_queues,
         # assert int(results['buckets'][0]['value']) == 49
         assert results == data
 
+def test_terms_query3(app, es):
+    query_config = app.config["STATS_QUERIES"]
+    from invenio_search import current_search_client
+    import uuid
+    data = [
+        {"timestamp": "2024-01-11T00:00:00","unique_id": "eaaf015f-6ef9-3809-9fc2-2c3be2b4a5cd","count": 1,"updated_timestamp": "2024-09-30T00:00:00.905282+00:00","event_type": "celery-task","unique_count": 0,"volume": 0.0,"task_id": "8ae7598d-0852-4d80-b52c-0d5c73840b8f","task_name": "harvest","task_state": "SUCCESS","start_time": "2024-09-20T20:23:24","end_time": "2024-09-20T11:23:35","total_records": 0,"repository_name": "weko","execution_time": "-1 day, 15:00:11.413568"},
+        {"timestamp": "2024-01-21T00:00:00","unique_id": "203ae31f-1918-4073-8cf7-6047397e7321","count": 1,"updated_timestamp": "2024-09-30T00:00:01.107066+00:00","event_type": "celery-task","unique_count": 0,"volume": 0.0,"task_id": "8ae7598d-0852-4d80-b52c-0d5c73840b8f","task_name": "harvest","task_state": "SUCCESS","start_time": "2024-09-20T20:23:24","end_time": "2024-09-20T11:23:35","total_records": 0,"repository_name": "weko","execution_time": "-1 day, 15:00:11.413568"},
+        {"timestamp": "2024-02-11T00:00:00","unique_id": "3e166840-a672-4a34-b909-2353fd8fd2f4","count": 1,"updated_timestamp": "2024-09-30T00:00:01.466962+00:00","event_type": "celery-task","unique_count": 0,"volume": 0.0,"task_id": "8ae7598d-0852-4d80-b52c-0d5c73840b8f","task_name": "harvest","task_state": "SUCCESS","start_time": "2024-09-20T20:23:24","end_time": "2024-09-20T11:23:35","total_records": 0,"repository_name": "weko","execution_time": "-1 day, 15:00:11.413568"}
+    ]
+
+    for d in data:
+        current_search_client.index(
+            index=f"{app.config['SEARCH_INDEX_PREFIX']}events-stats-celery-task",
+            id=f"{d['timestamp']}-{str(uuid.uuid4())}",
+            body=d
+        )
+
+
+    terms_query = ESTermsQuery(**query_config['get-celery-task-report']["params"])
+
+    result = terms_query.run()
+    print(result)
+    assert 1==2
+
 # .tox/c1/bin/pytest --cov=invenio_stats tests/test_queries.py::test_terms_query2 -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/invenio-stats/.tox/c1/tmp
 def test_terms_query2(i18n_app, queries_config):
     config_num = 0        # query_name='get-celery-task-report'
     terms_config = queries_config[config_num]['queries_config']
-    
+
     # validate_arguments
     query = ESTermsQuery(
         query_name='test_total_count',

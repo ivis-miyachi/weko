@@ -466,7 +466,7 @@ def update_items_by_authorInfo(user_id, target, origin_pkid_list=[],
                         branch="record_ids is not empty")
             sleep(20)
             query = [
-                x[0] for x 
+                x[0] for x
                 in PersistentIdentifier.query
                     .filter(PersistentIdentifier.object_uuid.in_(record_ids))
                     .values(PersistentIdentifier.object_uuid)
@@ -553,7 +553,7 @@ def update_items_by_authorInfo(user_id, target, origin_pkid_list=[],
         "full_name": {
             "ids_key": "nameIdentifiers",
             "id_scheme_key": "nameIdentifierScheme",
-            "id_key": "nameIdentifier",                                                                                     
+            "id_key": "nameIdentifier",
             "id_uri_key": "nameIdentifierURI",
             "names_key": "names",
             "name_key": "name",
@@ -607,7 +607,7 @@ def update_items_by_authorInfo(user_id, target, origin_pkid_list=[],
                 current_app.config["WEKO_DEPOSIT_ITEM_UPDATE_STATUS_TTL"])
     except SQLAlchemyError as ex:
         process_counter[SUCCESS_LABEL] = []
-        process_counter[FAIL_LABEL] = [{"record_id": "ALL", 
+        process_counter[FAIL_LABEL] = [{"record_id": "ALL",
                                         "author_ids": [], "message": str(ex)}]
         delete_cache_data("update_items_by_authorInfo_{}".format(user_id))
         update_cache_data(
@@ -619,7 +619,7 @@ def update_items_by_authorInfo(user_id, target, origin_pkid_list=[],
         update_items_by_authorInfo.retry(countdown=3, exc=ex, max_retries=1)
     except Exception as ex:
         process_counter[SUCCESS_LABEL] = []
-        process_counter[FAIL_LABEL] = [{"record_id": "ALL", 
+        process_counter[FAIL_LABEL] = [{"record_id": "ALL",
                                         "author_ids": [], "message": str(ex)}]
         delete_cache_data("update_items_by_authorInfo_{}".format(user_id))
         update_cache_data(

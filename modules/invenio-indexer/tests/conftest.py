@@ -33,7 +33,11 @@ def base_app(request):
     app = Flask("testapp", instance_path=instance_path)
     app.config.update(
         SEARCH_ELASTIC_HOSTS=os.environ.get(
-                'SEARCH_ELASTIC_HOSTS', 'elasticsearch'),
+                'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST', 'opensearch'
+        ),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         BROKER_URL='amqp://guest:guest@rabbitmq:5672/',
         CELERY_BROKER_URL=os.environ.get(
             "BROKER_URL", "amqp://guest:guest@localhost:5672//"
@@ -60,7 +64,7 @@ def base_app(request):
     InvenioDB(app)
     InvenioRecords(app)
     search = InvenioSearch(app, entry_point_group=None)
-    search.register_mappings("records", "tests.data")
+    #search.register_mappings("records", "tests.data")
 
     with app.app_context():
         if not database_exists(str(db.engine.url)):

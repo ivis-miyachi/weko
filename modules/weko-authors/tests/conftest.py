@@ -26,7 +26,7 @@ import json
 import uuid
 from os.path import dirname, join
 
-from elasticsearch import Elasticsearch
+#from elasticsearch import Elasticsearch
 from sqlalchemy import inspect
 
 import pytest
@@ -39,6 +39,7 @@ from invenio_access.models import ActionUsers,ActionRoles
 from invenio_accounts import InvenioAccounts
 from invenio_accounts.models import User, Role
 from invenio_accounts.testutils import create_test_user, login_user_via_session
+from invenio_i18n import InvenioI18N
 
 from invenio_admin import InvenioAdmin
 from invenio_assets import InvenioAssets
@@ -126,7 +127,7 @@ class MockEs():
             pass
         def delete_alias(self, index="", name="",ignore=""):
             pass
-        
+
         # def search(self,index="",doc_type="",body={},**kwargs):
         #     pass
     class MockCluster():
@@ -163,9 +164,13 @@ def base_app(request, instance_path,search_class):
         CACHE_REDIS_URL='redis://redis:6379/0',
         CACHE_REDIS_DB='0',
         CACHE_REDIS_HOST="redis",
-        SEARCH_ELASTIC_HOSTS=os.environ.get("INVENIO_ELASTICSEARCH_HOST"),
+        SEARCH_ELASTIC_HOSTS=os.environ.get(
+                    'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST', 'opensearch'
+        ),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         SEARCH_INDEX_PREFIX="{}-".format('test'),
-        SEARCH_CLIENT_CONFIG=dict(timeout=120, max_retries=10),
     )
     Babel(app_)
     InvenioDB(app_)
@@ -176,12 +181,13 @@ def base_app(request, instance_path,search_class):
     InvenioAssets(app_)
     InvenioIndexer(app_)
     InvenioFilesREST(app_)
-    if hasattr(request, 'param'):
-        if 'is_es' in request.param:
-            search = InvenioSearch(app_)
-    else:
-        search = InvenioSearch(app_, client=MockEs())
-        search.register_mappings(search_class.Meta.index, 'mock_module.mapping')
+    InvenioI18N(app_)
+    #if hasattr(request, 'param'):
+    #    if 'is_es' in request.param:
+    search = InvenioSearch(app_)
+    #else:
+    #    search = InvenioSearch(app_, client=MockEs())
+    #    search.register_mappings(search_class.Meta.index, 'mock_module.mapping')
     WekoTheme(app_)
     WekoAuthors(app_)
     WekoSearchUI(app_)
@@ -228,7 +234,12 @@ def base_app2(instance_path,search_class):
         CACHE_REDIS_URL='redis://redis:6379/0',
         CACHE_REDIS_DB='0',
         CACHE_REDIS_HOST="redis",
-        SEARCH_ELASTIC_HOSTS=os.environ.get("SEARCH_ELASTIC_HOSTS", "elasticsearch"),
+        SEARCH_ELASTIC_HOSTS=os.environ.get(
+                    'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST', 'opensearch'
+        ),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
     )
     Babel(app_)
     InvenioDB(app_)
@@ -280,17 +291,23 @@ from invenio_search import current_search_client
 @pytest.fixture()
 def esindex(app):
     current_search_client.indices.delete(index='test-*')
-    with open("tests/mock_module/mapping/v6/authors/author-v1.0.0.json","r") as f:
-        mapping = json.load(f)
+    with open("tests/mock_module/mapping/os-v2/authors/author-v1.0.0.json","r") as f:
+        mapping_author = json.load(f)
+    with open("tests/mock_module/mapping/os-v2/records/item-v1.0.0.json","r") as f:
+        mapping_record = json.load(f)
     with app.test_request_context():
-        current_search_client.indices.create("test-authors-author-v1.0.0",body=mapping)
+        current_search_client.indices.create("test-authors-author-v1.0.0",body=mapping_author)
         current_search_client.indices.put_alias(index="test-authors-author-v1.0.0", name=app.config["WEKO_AUTHORS_ES_INDEX_NAME"])
+        current_search_client.indices.create("test-weko-item-v1.0.0",body=mapping_record)
+        current_search_client.indices.put_alias(index="test-weko-item-v1.0.0", name=app.config["SEARCH_UI_SEARCH_INDEX"])
 
     yield current_search_client
 
     with app.test_request_context():
         current_search_client.indices.delete_alias(index="test-authors-author-v1.0.0", name=app.config["WEKO_AUTHORS_ES_INDEX_NAME"])
         current_search_client.indices.delete(index="test-authors-author-v1.0.0", ignore=[400, 404])
+        current_search_client.indices.delete_alias(index="test-weko-item-v1.0.0", name=app.config["SEARCH_UI_SEARCH_INDEX"])
+        current_search_client.indices.delete(index="test-weko-item-v1.0.0", ignore=[400, 404])
 
 
 @pytest.fixture()
@@ -318,7 +335,7 @@ def users(app, db):
         originalroleuser = create_test_user(email='originalroleuser@test.org')
         originalroleuser2 = create_test_user(email='originalroleuser2@test.org')
         student = User.query.filter_by(email='student@test.org').first()
-        
+
     role_count = Role.query.filter_by(name='System Administrator').count()
     if role_count != 1:
         sysadmin_role = ds.create_role(name='System Administrator')
@@ -438,7 +455,7 @@ def create_author(app, db, esindex):
             author = Authors(id=next_id, json=data)
             db.session.add(author)
         db.session.commit()
-            
+
         current_search_client.index(
             index=app.config["WEKO_AUTHORS_ES_INDEX_NAME"],
             doc_type=app.config['WEKO_AUTHORS_ES_DOC_TYPE'],
@@ -486,7 +503,7 @@ def authors(app,db,esindex):
             id=es_id,
             body=es_data,
             refresh='true')
-    
+
     db.session.add_all(returns)
     db.session.commit()
     return returns
@@ -525,7 +542,7 @@ def authors_affiliation_settings(db):
     aass.append(AuthorsAffiliationSettings(name="kakenhi",scheme="kakenhi"))
     db.session.add_all(aass)
     db.session.commit()
-    
+
     return aass
 
 @pytest.fixture()
@@ -539,21 +556,21 @@ def file_instance(db):
     db.session.commit()
 
 
-@pytest.fixture()
-def esindex(app2):
-    from invenio_search import current_search_client as client
-    index_name = app2.config["INDEXER_DEFAULT_INDEX"]
-    alias_name = "test-author-alias"
-
-    with open("tests/data/mappings/author-v1.0.0.json","r") as f:
-        mapping = json.load(f)
-
-    with app2.test_request_context():
-        client.indices.create(index=index_name, body=mapping, ignore=[400])
-        client.indices.put_alias(index=index_name, name=alias_name)
-
-    yield client
-
-    with app2.test_request_context():
-        client.indices.delete_alias(index=index_name, name=alias_name)
-        client.indices.delete(index=index_name, ignore=[400, 404])
+#@pytest.fixture()
+#def esindex(app2):
+#    from invenio_search import current_search_client as client
+#    index_name = app2.config["INDEXER_DEFAULT_INDEX"]
+#    alias_name = "test-author-alias"
+#
+#    with open("tests/data/mappings/author-v1.0.0.json","r") as f:
+#        mapping = json.load(f)
+#
+#    with app2.test_request_context():
+#        client.indices.create(index=index_name, body=mapping, ignore=[400])
+#        client.indices.put_alias(index=index_name, name=alias_name)
+#
+#    yield client
+#
+#    with app2.test_request_context():
+#        client.indices.delete_alias(index=index_name, name=alias_name)
+#        client.indices.delete(index=index_name, ignore=[400, 404])
