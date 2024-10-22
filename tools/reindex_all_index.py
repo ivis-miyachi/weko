@@ -264,7 +264,8 @@ def create_stats_index(index_name, stats_prefix, stats_types):
     print("## start create stats index: {}".format(index_name))
     index_with_prefix = f"{prefix}-{index_name}"
     new_index_name = f"{index_with_prefix}-000001"
-    template_name = f"{prefix}-{template_files[index_name].split("/")[-1].replace(".json","")}"
+    filename_without_ext = template_files[index_name].split("/")[-1].replace(".json","")
+    template_name = f"{prefix}-{filename_without_ext}"
     template_url_event_stats = template_url.format(template_name)
     # template登録
     print("### put template")
