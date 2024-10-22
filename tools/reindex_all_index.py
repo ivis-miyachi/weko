@@ -1,3 +1,5 @@
+
+import sys
 import os
 import requests
 from requests.auth import HTTPBasicAuth
@@ -5,26 +7,36 @@ from importlib import import_module
 import re
 import json
 
+args = sys.argv
+if len(args) == 4:
+    http_method = "https" if args[1] == "https" else "http"
+    user = args[2]
+    password = args[3]
+    auth = HTTPBasicAuth(user,password)
+elif len(args) == 2:
+    http_method = "https" if args[1] == "https" else "http"
+    auth = None
+else:
+    print("Usage: python reindex_all_index.py [http_method] [user] [password]")
+    sys.exit(1)
+
 host = os.environ.get('INVENIO_ELASTICSEARCH_HOST','localhost')
-port = 9200
-# auth = ("admin","admin")
 version="v7"
 
-#base_url = "https://"+host +":9200/"
-base_url = "http://"+host +":9200/"
+base_url = http_method + "://" + host +":9200/"
 reindex_url = base_url + "_reindex?pretty&refresh=true&wait_for_completion=true"
 bulk_url = base_url + "_bulk"
 template_url = base_url + "_template/{}"
-auth = HTTPBasicAuth("admin","admin")
 verify=False
 headers = {"Content-Type":"application/json"}
 bulk_headers = {"Content-Type":"application/x-ndjson"}
-# args = {}
-# if auth:
-#     args["auth"] = auth
 
-req_args = {"headers":headers,"auth":auth,"verify":verify}
-bulk_req_args = {"headers":bulk_headers,"auth":auth,"verify":verify}
+
+req_args = {"headers":headers,"verify":verify}
+bulk_req_args = {"headers":bulk_headers,"verify":verify}
+if auth:
+    req_args["auth"] = auth 
+    bulk_req_args["auth"] = auth
 
 mapping_files = {
     "authors-author-v1.0.0": f"weko-authors/weko_authors/mappings/{version}/authors/author-v1.0.0.json",
@@ -45,10 +57,12 @@ delete_indexes = [
 ]
 
 prefix = os.environ.get('SEARCH_INDEX_PREFIX')
+
 def replace_prefix_index(index_name):
     index_tmp = re.sub(f"^{prefix}-", "", index_name)
     index_tmp = re.sub("-\d{6}$","",index_tmp)
     return index_tmp
+
 # indexとalias一覧取得
 print("# get indexes and aliases")
 organization_aliases = prefix+"-*"
@@ -107,13 +121,14 @@ for index, path in template_files.items():
 
 # 削除対象のインデックスの削除
 print("# delete indexes")
-print(indexes)
 delete_target_index = [index for index in indexes if re.sub(f"^{prefix}-", "", index) in delete_indexes]
-print(delete_target_index)
-delete_bulk = ""
 for target in delete_target_index:
     delete_url = f"{base_url}{target}"
     res = requests.delete(delete_url,**req_args)
+    if res.status_code!=200:
+        print("## raise error: delete index:{}".format(target))
+        raise Exception(res.text)
+
 percolator_body = {"properties": {"query": {"type": "percolator"}}}
 # for index in indexes_alias:
 for index, mapping in mappings.items():
@@ -223,6 +238,8 @@ for index, mapping in mappings.items():
         print(traceback.format_exc())
 
 # is_write_indexをfalseに切り替え
+print("# Start of invenio-stats index consolidation")
+print("## Change is_write_index to False")
 json_data_toggle_aliases={"actions":[]}
 for index in write_indexes:
     json_data_toggle_aliases["actions"].append({
@@ -239,15 +256,27 @@ for index in write_indexes:
         }
     })
 res = requests.post(base_url+"_aliases",json=json_data_toggle_aliases,**req_args)
+if res.status_code!=200:
+    print("##raise error: toggle is_write_index")
+    raise Exception(res.text)
 
 def create_stats_index(index_name, stats_prefix, stats_types):
+    print("## start create stats index: {}".format(index_name))
     index_with_prefix = f"{prefix}-{index_name}"
     new_index_name = f"{index_with_prefix}-000001"
     template_url_event_stats = template_url.format(index_with_prefix)
     # template登録
+    print("### put template")
     res = requests.put(template_url_event_stats,json=templates[index_name],**req_args)
+    if res.status_code!=200:
+        print("### raise error: put template")
+        raise Exception(res.text)
     # index作成
+    print("### craete index")
     res = requests.put(base_url+new_index_name+"?pretty",**req_args)
+    if res.status_code!=200:
+        print("## raise error: create index")
+        raise Exception(res.text)
 
     # エイリアス登録用データ作成
     alias_actions = []
@@ -274,8 +303,10 @@ def create_stats_index(index_name, stats_prefix, stats_types):
     return alias_actions
 
 def stats_reindex(stats_types, stats_prefix):
+    print("## start reindex stats index: {}".format(stats_prefix))
     stats_indexes = [index for index in indexes_alias if replace_prefix_index(index) in stats_types]
     for index in stats_indexes:
+        print("### reindex: {}".format(index))
         from_reindex = index
         to_reindex = f"{prefix}-{stats_prefix}-index"
         event_type = replace_prefix_index(index).replace(f"{stats_prefix}-","")
@@ -288,6 +319,9 @@ def stats_reindex(stats_types, stats_prefix):
             }
         }
         res = requests.post(url=reindex_url,json=body,**req_args)
+        if res.status_code!=200:
+            print("### raise error: reindex: {}".format(index))
+            raise Exception(res.text)
 
 event_stats_types = [
     "events-stats-celery-task",
@@ -314,12 +348,19 @@ alias_actions += create_stats_index("events-stats-index", "events-stats", event_
 alias_actions += create_stats_index("stats-index", "stats", stats_types)
 
 res = requests.post(base_url+"_aliases",json={"actions":alias_actions},**req_args)
+if res.status_code!=200:
+    print("## raise error: put aliases")
+    raise Exception(res.text)
 
 stats_reindex(event_stats_types, "events-stats")
 stats_reindex(stats_types, "stats")
 
 # delete stats index
+print("# delete stats index")
 delete_bulk = ""
 for target in delete_target_stats:
     delete_url = f"{base_url}{target}"
     res = requests.delete(delete_url,**req_args)
+    if res.status_code!=200:
+        print("## raise error: delete stats index:{}".format(target))
+        raise Exception(res.text)
