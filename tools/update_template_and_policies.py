@@ -82,15 +82,19 @@ try:
     }
     policy_name="weko_stats_policy"
     print("# put ism policy")
-    res = requests.get(ism_url,**req_args)
-    if res.status_code == 200:
-        res = requests.delete(ism_url,**req_args)
-        if res.status_code!=200:
-            raise Exception(res.text)
-    else:
-        raise Exception(res.text)
+    # res = requests.get(ism_url,**req_args)
+    # print(res.text)
+    # if res.status_code == 200:
+    #     res = requests.delete(ism_url,**req_args)
+    #     if res.status_code!=200:
+    #         print(1)
+    #         raise Exception(res.text)
+    # else:
+    #     print(2)
+    #     raise Exception(res.text)
     res = requests.put(ism_url, json=ism_body,**req_args)
     if res.status_code!=201:
+        print(3)
         raise Exception(res.text)
 except Exception as e:
     import traceback
