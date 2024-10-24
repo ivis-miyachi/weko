@@ -44,6 +44,9 @@
 
     <script src="{{ url_for('static', filename='js/weko_items_ui/item.autofill.js') }}" type="text/babel"></script>
     {{ webpack['deposit_js_dependencies.js']}}
+    <script src="/assets/node_modules/invenio-files-js/dist/invenio-files-js.js"></script>
+    <script src="/assets/node_modules/underscore/underscore.js"></script>
+    <script src="/assets/node_modules/angular-schema-form/dist/bootstrap-decorator.js"></script>
     <script src="/assets/js/weko_admin/react-bootstrap.min.js"></script>
     {{ webpack['items_ui_js_feedback_maillist.js']}}
     {{ super() }}

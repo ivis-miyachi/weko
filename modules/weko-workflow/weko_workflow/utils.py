@@ -1867,6 +1867,8 @@ def handle_finish_workflow(deposit, current_pid, recid):
         if recid:
             # new record attached version ID
             new_deposit = deposit.newversion(current_pid)
+            new_deposit.pid.register()
+            PersistentIdentifier.query.filter_by(pid_type="recid", pid_value=new_deposit.pid.pid_value).one().register()
             item_id = new_deposit.model.id
             ver_attaching_deposit = WekoDeposit(
                 new_deposit,

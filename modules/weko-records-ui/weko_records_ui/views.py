@@ -430,7 +430,7 @@ def default_view_method(pid, record, filename=None, template=None, **kwargs):
     # Get PID version object to retrieve all versions of item
     parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
     pid_ver = PIDNodeVersioning(pid=parent_pid)
-    if parent_pid is None or pid_ver.is_last_child:
+    if parent_pid is None or pid_ver.is_last_child(pid):
         abort(404)
     active_versions = list(super(PIDNodeVersioning, pid_ver).children or [])
     all_versions = list(pid_ver.children or [])

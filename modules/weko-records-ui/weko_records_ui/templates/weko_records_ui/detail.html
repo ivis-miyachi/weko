@@ -16,9 +16,7 @@
 {%- endblock css %}
 
 {%- block javascript %}
-<!--   {% assets "weko_records_ui_dependencies_js" %}<script src="{{ ASSET_URL
-    }}"></script>{% endassets %} -->
-  {{ webpack['js-dependencies.js']}}
+  {{ webpack['records_ui_js_dependecies.js']}}
   
   {{ super() }}
   <script src="{{ url_for('static', filename='js/weko_theme/inline.bundle.js') }}" defer></script>
@@ -42,7 +40,7 @@
   </script>
   <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
   <!-- end demo block -->
-  {{ webpack['theme-js-widget.js']}}
+  {{ webpack['theme-widget.js']}}
   {{ webpack['records_ui_bootstrap_popover_js.js']}}
 {%- endblock javascript %}
 

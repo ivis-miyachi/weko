@@ -23,7 +23,7 @@ class MarshmallowMixin(PreprocessorMixin):
 
     def dump(self, obj, context=None):
         """Serialize object with schema."""
-        return self.schema_class(context=context).dump(obj).data
+        return self.schema_class(context=context).dump(obj)
 
     def transform_record(self, pid, record, links_factory=None, **kwargs):
         """Transform record into an intermediate representation."""

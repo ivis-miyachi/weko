@@ -33,8 +33,6 @@ invenio_deposit = WebpackThemeBundle(
                 'angular-underscore': '~0.0.3',
                 'ui-select': '~0.18.1',
                 'almond': '~0.3.1',
-                'angular-sanitize': '~1.4.10',
-                'underscore': '~1.8.3',
             }
         )
     }

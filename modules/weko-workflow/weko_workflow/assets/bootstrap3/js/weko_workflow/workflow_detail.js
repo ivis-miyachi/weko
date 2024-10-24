@@ -275,8 +275,7 @@ function nextAction() {
     let community_id = $('#community_id').text();
     let post_data = {
         commond: $('#input-comment').val(),
-        action_version: act_ver,
-        community: community_id
+        action_version: act_ver
     };
     $.ajax({
         url: uri_apo,
