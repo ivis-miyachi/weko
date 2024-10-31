@@ -193,14 +193,12 @@ class ItemTypeMetaDataView(BaseView):
             json_form = table_row_map.get('form')
             json_schema = update_required_schema_not_exist_in_form(
                 json_schema, json_form)
-
             if item_type_id != 0:
                 json_schema, json_form = update_text_and_textarea(
                     item_type_id, json_schema, json_form)
 
             if not json_schema:
                 raise ValueError('Schema is in wrong format.')
-
             record = ItemTypes.update(id_=item_type_id,
                                       name=table_row_map.get('name'),
                                       schema=json_schema,
@@ -352,9 +350,9 @@ class ItemTypeMetaDataView(BaseView):
         fp = io.BytesIO()
         with ZipFile(fp, 'w', compression=ZIP_DEFLATED) as new_zip:
             # zipファイルにJSON文字列を追加
-            new_zip.writestr("ItemType.json", ItemTypeSchema().dumps(item_types).data.encode().decode('unicode-escape').encode())
-            new_zip.writestr("ItemTypeName.json", ItemTypeNameSchema().dumps(item_type_names).data.encode().decode('unicode-escape').encode())
-            new_zip.writestr("ItemTypeMapping.json", ItemTypeMappingSchema().dumps(item_type_mappings.model).data.encode().decode('unicode-escape').encode())
+            new_zip.writestr("ItemType.json", ItemTypeSchema().dumps(item_types).data.encode('utf-8').decode('unicode-escape').encode('utf-8'))
+            new_zip.writestr("ItemTypeName.json", ItemTypeNameSchema().dumps(item_type_names).data.encode('utf-8').decode('unicode-escape').encode('utf-8'))
+            new_zip.writestr("ItemTypeMapping.json", ItemTypeMappingSchema().dumps(item_type_mappings.model).data.encode('utf-8').decode('unicode-escape').encode('utf-8'))
             json_str = ""
             for item_type_property in item_type_properties :
                 prop_str = ItemTypePropertySchema().dumps(item_type_property).data
@@ -405,7 +403,9 @@ class ItemTypeMetaDataView(BaseView):
                         current_app.logger.debug(file_name + " is ignored.")
                     else:
                         with import_zip.open(file_name, 'r') as json_file:
-                            json_obj = json.load(json_file)
+                            file_content = json_file.read().decode("utf-8")
+                            file_content_escape = file_content.replace("\\","\\\\")
+                            json_obj = json.loads(file_content_escape)
                             if file_name == "ItemType.json":
                                 import_data["ItemType"] = json_obj
                                 #print(json_obj)

@@ -393,10 +393,18 @@ class TestItemTypeMetaDataView:
         file = FileStorage(filename="",stream=None)
         # not exist item_type_name
         res = client.post(url,data={"item_type_name":"","file":(file,"")},content_type="multipart/form-data")
-
         assert json.loads(res.data)["msg"] == 'No item type name Error'
         
+        res = client.post(url,data={"item_type_name":"test_itemtype","file":(file,"")})
+        assert json.loads(res.data)["msg"] == "No file Error"
         
+        fp = BytesIO()
+        with ZipFile(fp, "w", compression=ZIP_DEFLATED) as new_zip:
+            for dir, subdirs, files in os.walk("tests/data/import_itemtype"):
+                new_zip.write(dir,dir.split("/")[-1])
+                for file in files:
+                    new_zip.write(os.path.join(dir, file),os.path.join(dir.split("/")[-1],file))
+
         file = FileStorage(filename='test', stream=BytesIO(b'test'))
         res = client.post(url,data={"item_type_name":"テストアイテムタイプ1","file":file},
                           content_type="multipart/form-data")
