@@ -46,6 +46,7 @@ class OAISetModelView(ModelView):
     column_default_sort = ("updated", True)
     column_searchable_list = ["spec", "name", "description"]
     page_size = 25
+    form_excluded_columns = ("system_created")
 
     def edit_form(self, obj):
         """Customize edit form."""
@@ -53,6 +54,10 @@ class OAISetModelView(ModelView):
         del form.spec
         return form
 
+    def on_model_change(self, form, model, is_created):
+        if is_created:
+            model.system_created = False
+        super(OAISetModelView, self).on_model_change(form, model, is_created)
 
 set_adminview = dict(
     modelview=OAISetModelView,
