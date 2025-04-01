@@ -122,47 +122,55 @@ def write_files_task(export_path, pickle_file_name , user_id):
         pickle_file_name (str): pickle file's name
         user_id (int): a user who processed file output.
     """
-    _msg_config = current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_MSG"]
-    _msg_key = current_app.config["WEKO_ADMIN_CACHE_PREFIX"].format(
-        name=_msg_config,
-        user_id=user_id
-    )
-    _file_create_config = \
-        current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_FILE_CREATE_RUN_MSG"]
-    _file_create_key = current_app.config["WEKO_ADMIN_CACHE_PREFIX"].format(
-        name=_file_create_config,
-        user_id=user_id
-    )
+    try:
+        current_app.logger.error(f"##start write_files_task:{pickle_file_name}")
+        _msg_config = current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_MSG"]
+        _msg_key = current_app.config["WEKO_ADMIN_CACHE_PREFIX"].format(
+            name=_msg_config,
+            user_id=user_id
+        )
+        _file_create_config = \
+            current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_FILE_CREATE_RUN_MSG"]
+        _file_create_key = current_app.config["WEKO_ADMIN_CACHE_PREFIX"].format(
+            name=_file_create_config,
+            user_id=user_id
+        )
 
-    def _update_redis_status(json_data, file_name, status,item_type_id):
-        "Update status in redis cache."
-        part_name = os.path.splitext(file_name)[1]
-        part_index = part_name.find('part')
-        part_number = part_name[part_index + 4:] if part_index != -1 else 1
-        json_data['write_file_status'][item_type_id + '.' + str(part_number)] = status
-        reset_redis_cache(_file_create_key, json.dumps(json_data))
-        del part_name, part_index, part_number
+        def _update_redis_status(json_data, file_name, status,item_type_id):
+            "Update status in redis cache."
+            part_name = os.path.splitext(file_name)[1]
+            part_index = part_name.find('part')
+            part_number = part_name[part_index + 4:] if part_index != -1 else 1
+            json_data['write_file_status'][item_type_id + '.' + str(part_number)] = status
+            reset_redis_cache(_file_create_key, json.dumps(json_data))
+            current_app.logger.error(f"##write status redis: {item_type_id+'.'+str(part_number)} -> {status}")
+            del part_name, part_index, part_number
 
-    with open(pickle_file_name, 'rb') as f:
-        import_datas = pickle.load(f)
-    json_data = json.loads(get_redis_cache(_file_create_key))
-    if not json_data['cancel_flg']:
-        _update_redis_status(json_data, import_datas['name'], 'started',import_datas['item_type_id'])
         with open(pickle_file_name, 'rb') as f:
             import_datas = pickle.load(f)
-        result = write_files(import_datas, export_path, user_id, 0)
         json_data = json.loads(get_redis_cache(_file_create_key))
-        if result:
-            _update_redis_status(json_data, import_datas['name'], 'finished',import_datas['item_type_id'])
+        if not json_data['cancel_flg']:
+            _update_redis_status(json_data, import_datas['name'], 'started',import_datas['item_type_id'])
+            with open(pickle_file_name, 'rb') as f:
+                import_datas = pickle.load(f)
+            
+            result = write_files(import_datas, export_path, user_id, 0)
+            current_app.logger.error("##start write_files")
+            json_data = json.loads(get_redis_cache(_file_create_key))
+            if result:
+                _update_redis_status(json_data, import_datas['name'], 'finished',import_datas['item_type_id'])
+            else:
+                reset_redis_cache(_msg_key, "Export failed.")
+                json_data['cancel_flg'] = True
+                _update_redis_status(json_data, import_datas['name'], 'error',import_datas['item_type_id'])
         else:
-            reset_redis_cache(_msg_key, "Export failed.")
-            json_data['cancel_flg'] = True
-            _update_redis_status(json_data, import_datas['name'], 'error',import_datas['item_type_id'])
-    else:
-        _update_redis_status(json_data, import_datas['name'], 'canceled',import_datas['item_type_id'])
-    del import_datas,json_data
-    gc.collect()
-    os.remove(pickle_file_name)
+            _update_redis_status(json_data, import_datas['name'], 'canceled',import_datas['item_type_id'])
+        del import_datas,json_data
+        gc.collect()
+        os.remove(pickle_file_name)
+        current_app.logger.error(f"##delete pickle_file:{pickle_file_name}")
+    except Exception as e:
+        current_app.logger.error(e)
 
 
 @shared_task

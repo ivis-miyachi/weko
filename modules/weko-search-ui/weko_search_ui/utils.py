@@ -46,6 +46,7 @@ import pickle
 
 import redis
 from redis import sentinel
+from celery import chain
 from celery.result import AsyncResult
 from celery.task.control import revoke
 from elasticsearch import ElasticsearchException
@@ -3279,7 +3280,16 @@ def handle_check_duplication_item_id(ids: list):
             result.append(element)
     return list(set(result))
 
+def ignorant_chain(task_list):
+    prev = None
+    for each_task in reversed(task_list):
+        if prev is None:
+            prev = each_task
+            continue
 
+        prev = each_task.set(link=prev).set(link_error=prev)
+
+    return prev
 def export_all(root_url, user_id, data, start_time):
     """Prepare to gather all the item data and export and return as a JSON or BIBTEX.
 
@@ -3291,7 +3301,7 @@ def export_all(root_url, user_id, data, start_time):
     """
     from weko_search_ui.tasks import write_files_task
 
-    current_app.logger.info("Bulk export all start at {}.".format(start_time))
+    current_app.logger.error("#Bulk export all start at {}.".format(start_time))
 
     _cache_prefix = current_app.config["WEKO_ADMIN_CACHE_PREFIX"]
     _msg_config = current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_MSG"]
@@ -3353,14 +3363,14 @@ def export_all(root_url, user_id, data, start_time):
                 pickle_file_name = ''
                 counter, file_part, from_pid = get_retry_info(
                     item_type_id, retry_info, fromid)
-                current_app.logger.info(
-                    "Start bulk export of item type {}({}).".format(
+                current_app.logger.error(
+                    "#Start bulk export of item type {}({}).".format(
                         item_type_name, item_type_id
                     )
                 )
 
                 recids = get_all_record_id(toid, from_pid, item_type_id)
-                current_app.logger.info("{}({}) get recids completed:{}".format(item_type_name, item_type_id, recids.count()))
+                current_app.logger.error("#{}({}) get recids completed:{}".format(item_type_name, item_type_id, recids.count()))
                 if not recids:
                     item_types.remove(it)
                     continue
@@ -3374,6 +3384,7 @@ def export_all(root_url, user_id, data, start_time):
                 write_file_json = json.loads(get_redis_cache(_file_create_key))
                 for i in range(file_count):
                     write_file_json['write_file_status'][item_type_id + '.' + str(i + 1)] = 'waiting'
+                    current_app.logger.error(f"#write status redis: {item_type_id+'.'+str(i+1)} -> waiting")
                 reset_redis_cache(
                     _file_create_key,
                     json.dumps(write_file_json)
@@ -3383,6 +3394,7 @@ def export_all(root_url, user_id, data, start_time):
                     item_types.remove(it)
                     continue
                 
+                args = []
                 for recid, uuid in record_ids:
                     if counter % current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_LIMIT"] == 0 and item_datas:
                         # Create export info file
@@ -3394,9 +3406,12 @@ def export_all(root_url, user_id, data, start_time):
                         )
                         with open(pickle_file_name, 'wb') as f:
                             pickle.dump(item_datas, f)
+                        current_app.logger.error(f"#create pickle file:{pickle_file_name}")
                         del item_datas
                         gc.collect()
-                        write_files_task.apply_async(args=(export_path, pickle_file_name, user_id,))
+                        # write_files_task.apply_async(args=(export_path, pickle_file_name, user_id,))
+                        
+                        args.append((export_path, pickle_file_name, user_id,))
                         item_datas = {}
                         file_part += 1
                         retry_info[item_type_id] = {
@@ -3436,18 +3451,25 @@ def export_all(root_url, user_id, data, start_time):
 
                 with open(pickle_file_name, 'wb') as f:
                     pickle.dump(item_datas, f)
-
+                current_app.logger.error(f"#create pickle file:{pickle_file_name}")
                 del item_datas
                 gc.collect()
 
                 # Create export info file
-                write_files_task.apply_async(args=(export_path, pickle_file_name, user_id,))
+                # write_files_task.apply_async(args=(export_path, pickle_file_name, user_id,))
+                args.append((export_path, pickle_file_name, user_id,))
+                
+                create_file_tasks = ignorant_chain([write_files_task.si(*arg) for arg in args])
+                create_file_tasks.apply_async()
+                
                 item_types.remove(it)
-                current_app.logger.info(
-                    "Processed {} items of item type {}.".format(
+                current_app.logger.error(
+                    "#Processed {} items of item type {}.".format(
                         counter, item_type_name
                     )
                 )
+                
+                
             return True
         except SQLAlchemyError as ex:
             current_app.logger.error(ex)
@@ -3678,8 +3700,10 @@ def write_files(item_datas, export_path, user_id, retrys):
         with open(file_full_path, "w", encoding="utf-8-sig") as file:
             file_output = package_export_file(item_type_data)
             file.write(file_output.getvalue())
+            current_app.logger.error("##create file:{}".format(item_type_data.get("name")))
             del file_output,item_type_data
             gc.collect()
+        
         reset_redis_cache(
             _run_msg_key,
             "The latest {} file was created on {}.".format(
@@ -3687,8 +3711,8 @@ def write_files(item_datas, export_path, user_id, retrys):
                 datetime.now(pytz.timezone(_timezone)).strftime("%Y/%m/%d %H:%M:%S"))
             + " Number of retries: {} times.".format(retrys)
         )
-        current_app.logger.info(
-            "{}.{} has been created.".format(item_datas["name"], _file_format)
+        current_app.logger.error(
+            "##{}.{} has been created.".format(item_datas["name"], _file_format)
         )
         db.session.commit()
         del item_datas, headers, records, keys, labels, is_systems, options,permissions
@@ -3699,7 +3723,7 @@ def write_files(item_datas, export_path, user_id, retrys):
         _num_retry = current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_RETRY"]
         if retrys < _num_retry:
             retrys += 1
-            current_app.logger.info("retry count: {}".format(retrys))
+            current_app.logger.error("##retry count: {}".format(retrys))
             db.session.rollback()
             sleep(5)
             result = write_files(
@@ -3708,6 +3732,10 @@ def write_files(item_datas, export_path, user_id, retrys):
             return result
         else:
             return False
+    except Exception as ex:
+        current_app.logger.error(ex)
+        current_app.logger.error(traceback.format_exc())
+        return False
 
 
 def delete_exported(uri, cache_key):
