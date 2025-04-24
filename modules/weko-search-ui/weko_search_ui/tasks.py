@@ -135,7 +135,7 @@ def write_files_task(export_path, pickle_file_name , user_id):
             name=_file_create_config,
             user_id=user_id
         )
-
+        pickle_path = export_path + '/' + pickle_file_name
         def _update_redis_status(json_data, file_name, status,item_type_id):
             "Update status in redis cache."
             part_name = os.path.splitext(file_name)[1]
@@ -146,12 +146,12 @@ def write_files_task(export_path, pickle_file_name , user_id):
             current_app.logger.error(f"##write status redis: {item_type_id+'.'+str(part_number)} -> {status}")
             del part_name, part_index, part_number
 
-        with open(pickle_file_name, 'rb') as f:
+        with open(pickle_path, 'rb') as f:
             import_datas = pickle.load(f)
         json_data = json.loads(get_redis_cache(_file_create_key))
         if not json_data['cancel_flg']:
             _update_redis_status(json_data, import_datas['name'], 'started',import_datas['item_type_id'])
-            with open(pickle_file_name, 'rb') as f:
+            with open(pickle_path, 'rb') as f:
                 import_datas = pickle.load(f)
             
             result = write_files(import_datas, export_path, user_id, 0)
@@ -167,7 +167,7 @@ def write_files_task(export_path, pickle_file_name , user_id):
             _update_redis_status(json_data, import_datas['name'], 'canceled',import_datas['item_type_id'])
         del import_datas,json_data
         gc.collect()
-        os.remove(pickle_file_name)
+        os.remove(pickle_path)
         current_app.logger.error(f"##delete pickle_file:{pickle_file_name}")
     except Exception as e:
         current_app.logger.error(e)

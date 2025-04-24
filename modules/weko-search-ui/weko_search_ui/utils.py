@@ -36,7 +36,7 @@ import zipfile
 import chardet
 import gc
 from collections import Callable, OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial, reduce, wraps
 import io
 from io import StringIO
@@ -71,6 +71,7 @@ from sqlalchemy import func as _func
 from sqlalchemy.exc import SQLAlchemyError
 from weko_admin.models import SessionLifetime
 from weko_admin.utils import get_redis_cache, reset_redis_cache
+from weko_admin.api import TempDirInfo
 from weko_authors.models import Authors
 from weko_authors.utils import check_email_existed
 from weko_deposit.api import WekoDeposit, WekoIndexer, WekoRecord
@@ -3280,16 +3281,7 @@ def handle_check_duplication_item_id(ids: list):
             result.append(element)
     return list(set(result))
 
-def ignorant_chain(task_list):
-    prev = None
-    for each_task in reversed(task_list):
-        if prev is None:
-            prev = each_task
-            continue
 
-        prev = each_task.set(link=prev).set(link_error=prev)
-
-    return prev
 def export_all(root_url, user_id, data, start_time):
     """Prepare to gather all the item data and export and return as a JSON or BIBTEX.
 
@@ -3356,6 +3348,7 @@ def export_all(root_url, user_id, data, start_time):
                     _file_create_key,
                     json.dumps(write_file_json)
                 )
+            tasks = []
             for it in item_types.copy():
                 item_type_id = it[0]
                 item_type_name = it[1]
@@ -3393,8 +3386,8 @@ def export_all(root_url, user_id, data, start_time):
                 if len(record_ids) == 0:
                     item_types.remove(it)
                     continue
-                
-                args = []
+
+                target_ids = {}
                 for recid, uuid in record_ids:
                     if counter % current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_LIMIT"] == 0 and item_datas:
                         # Create export info file
@@ -3404,15 +3397,24 @@ def export_all(root_url, user_id, data, start_time):
                         pickle_file_name = "{}.{}.part{}.pickle".format(
                             user_id, item_type_id, file_part
                         )
-                        with open(pickle_file_name, 'wb') as f:
+                        pickle_path = export_path + "/" + pickle_file_name
+                        item_datas["recids"].extend(list(target_ids.values()))
+                        records = WekoRecord.get_records(list(target_ids.keys()))
+                        for record in records:
+                            target_recid = target_ids[record.id]
+                            item_datas["data"][target_recid] = record
+                        
+                        with open(pickle_path, 'wb') as f:
                             pickle.dump(item_datas, f)
                         current_app.logger.error(f"#create pickle file:{pickle_file_name}")
                         del item_datas
-                        gc.collect()
+                        del records
+                        # gc.collect()
                         # write_files_task.apply_async(args=(export_path, pickle_file_name, user_id,))
-                        
-                        args.append((export_path, pickle_file_name, user_id,))
+                        tasks.append(write_files_task.si(export_path, pickle_file_name, user_id))
+                        # args.append((export_path, pickle_file_name, user_id,))
                         item_datas = {}
+                        target_ids = {}
                         file_part += 1
                         retry_info[item_type_id] = {
                             "part": file_part,
@@ -3420,8 +3422,8 @@ def export_all(root_url, user_id, data, start_time):
                             "max": recid,
                         }
 
-                    record = WekoRecord.get_record_by_uuid(uuid)
-
+                    # record = WekoRecord.get_record_by_uuid(uuid)
+                    target_ids[uuid]=recid
                     if not item_datas:
                         item_datas = {
                             "item_type_id": item_type_id,
@@ -3434,12 +3436,8 @@ def export_all(root_url, user_id, data, start_time):
                             "data": {},
                         }
                         pickle_file_name = "{}.{}.pickle".format(user_id,item_type_id)
-
-                    item_datas["recids"].append(recid)
-                    item_datas["data"][recid] = record
+                        pickle_path = export_path + "/" + pickle_file_name
                     counter += 1
-                    del record
-                    gc.collect()
 
                 if file_part != 1:
                     item_datas["name"] = "{}.part{}".format(
@@ -3448,19 +3446,22 @@ def export_all(root_url, user_id, data, start_time):
                     pickle_file_name = "{}.{}.part{}.pickle".format(
                         user_id, item_type_id,file_part
                     )
-
-                with open(pickle_file_name, 'wb') as f:
+                    pickle_path = export_path + "/" + pickle_file_name
+                    
+                item_datas["recids"].extend(list(target_ids.values()))
+                records = WekoRecord.get_records(list(target_ids.keys()))
+                for record in records:
+                    target_recid = target_ids[record.id]
+                    item_datas["data"][target_recid] = record
+                with open(pickle_path, 'wb') as f:
                     pickle.dump(item_datas, f)
                 current_app.logger.error(f"#create pickle file:{pickle_file_name}")
                 del item_datas
                 gc.collect()
 
                 # Create export info file
-                # write_files_task.apply_async(args=(export_path, pickle_file_name, user_id,))
-                args.append((export_path, pickle_file_name, user_id,))
+                tasks.append(write_files_task.si(export_path, pickle_file_name, user_id))
                 
-                create_file_tasks = ignorant_chain([write_files_task.si(*arg) for arg in args])
-                create_file_tasks.apply_async()
                 
                 item_types.remove(it)
                 current_app.logger.error(
@@ -3470,8 +3471,13 @@ def export_all(root_url, user_id, data, start_time):
                 )
                 
                 
+            if len(tasks) > 0:
+                create_file_tasks = chain(*tasks)
+                create_file_tasks.apply_async()
             return True
         except SQLAlchemyError as ex:
+            import traceback
+            current_app.logger.error(traceback.format_exc())
             current_app.logger.error(ex)
             _num_retry = current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_RETRY"]
             if retrys < _num_retry:
@@ -3501,7 +3507,7 @@ def export_all(root_url, user_id, data, start_time):
         )
         prev_uri = get_redis_cache(_uri_key)
         if prev_uri:
-            delete_exported(prev_uri, _uri_key)
+            delete_exported_file(prev_uri, _uri_key)
 
         export_path = temp_path + "/" + datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
         os.makedirs(export_path, exist_ok=True)
@@ -3658,6 +3664,7 @@ def write_files(item_datas, export_path, user_id, retrys):
     """
     from weko_items_ui.utils import make_stats_file_with_permission, \
         package_export_file
+    current_app.logger.error("##called write_files:{}, retry: {}".format(item_datas.get("name"),retrys))
     _cache_prefix = current_app.config["WEKO_ADMIN_CACHE_PREFIX"]
     _run_msg_config = current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_RUN_MSG"]
     _run_msg_key = _cache_prefix.format(
@@ -3719,6 +3726,8 @@ def write_files(item_datas, export_path, user_id, retrys):
         gc.collect()
         return True
     except SQLAlchemyError as ex:
+        import traceback
+        current_app.logger.error(traceback.format_exc())
         current_app.logger.error(ex)
         _num_retry = current_app.config["WEKO_SEARCH_UI_BULK_EXPORT_RETRY"]
         if retrys < _num_retry:
@@ -3738,9 +3747,13 @@ def write_files(item_datas, export_path, user_id, retrys):
         return False
 
 
-def delete_exported(uri, cache_key):
-    """Delete File instance after time in file config."""
-    from simplekv.memory.redisstore import RedisStore
+def delete_exported_file(uri, cache_key):
+    """Delete File instance after time in file config.
+    
+    Args:
+        uri (str): URI of the file to be deleted.
+        cache_key (str): Cache key for the file.
+    """
 
     with db.session.begin_nested():
         file_instance = FileInstance.get_by_uri(uri)
@@ -3749,6 +3762,34 @@ def delete_exported(uri, cache_key):
     datastore = redis_connection.connection(db=current_app.config['CACHE_REDIS_DB'], kv = True)
     if datastore.redis.exists(cache_key):
         datastore.delete(cache_key)
+
+def delete_exported(export_path, export_info):
+    """Delete expired exported file.
+    
+    Delete the export result file from storage and cache.
+    
+    Args:
+        export_path (str): Path to the exported file.
+        export_info (dict): Information about the exported file.
+            - uri (str): Path to the exported zip file.
+            - cache_key (str): Cache key storing the path to the exported zip file.
+            - task_key (str): Cache key storing the export task ID.
+    
+    """
+
+    redis_connection = RedisConnection()
+    datastore = redis_connection.connection(db=current_app.config['CACHE_REDIS_DB'], kv = True)
+    if datastore.redis.exists(export_info.get("cache_key")):
+        datastore.delete(export_info.get("task_key"))
+    try:
+        delete_exported_file(export_info.get("uri"), export_info.get("cache_key"))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(e)
+        return False
+    shutil.rmtree(export_path)
+    return True
 
 from weko_search_ui.tasks import delete_task_id_cache
 def cancel_export_all():
@@ -3882,15 +3923,17 @@ def get_export_status():
                         reset_redis_cache(file_msg, json.dumps(write_file_data))
                         reset_redis_cache(cache_uri, download_uri)
                         reset_redis_cache(run_msg, "")
-                        delete_exported_task.apply_async(
-                            args=(
-                                download_uri,
-                                cache_uri,
-                                cache_key,
-                                export_path
-                            ),
-                            countdown=int(_expired_time) * 60,
-                        )
+                        expire = datetime.now() + \
+                            timedelta(days=current_app.config["WEKO_SEARCH_UI_EXPORT_FILE_RETENTION_DAYS"])
+                        export_info = {
+                            "is_export": True,
+                            "uri":download_uri,
+                            "cache_key":cache_uri,
+                            "task_key":cache_key,
+                            "expire": expire.strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        TempDirInfo().set(export_path, export_info)
+
                         os.remove(export_path + ".zip")
     except Exception as ex:
         current_app.logger.error(ex)
