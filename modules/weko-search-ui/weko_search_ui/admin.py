@@ -818,8 +818,11 @@ class ItemBulkExport(BaseView):
     @expose("/download", methods=["GET"])
     def download(self):
         """Funtion send file to Client.
-
-        path: it was load from FileInstance
+        
+        Sends the exported file to the client for download.
+        Checks the download URI and file expiration, and if the conditions are met,
+        returns the file as an attachment. If the file is not available for download,
+        returns status 200.
         """
         file_msg = current_app.config["WEKO_ADMIN_CACHE_PREFIX"].format(
             name=WEKO_SEARCH_UI_BULK_EXPORT_FILE_CREATE_RUN_MSG,
@@ -836,9 +839,9 @@ class ItemBulkExport(BaseView):
             # if the remaining time is below a certain threshold.
             tmp_cache = TempDirInfo().get(export_path)
             expire = tmp_cache.get("expire") if tmp_cache else None
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            now = datetime.now()
             if expire and \
-                (now-expire).total_seconds() <= current_app.config["WEKO_SEARCH_UI_FILE_DOWNLOAD_TTL_BUFFER"]:
+                (now-datetime.strptime(expire,"%Y-%m-%d %H:%M:%S")).total_seconds() <= current_app.config["WEKO_SEARCH_UI_FILE_DOWNLOAD_TTL_BUFFER"]:
                 expire = datetime.strptime(expire,"%Y-%m-%d %H:%M:%S")
                 new_expire = expire+timedelta(seconds=current_app.config["WEKO_SEARCH_UI_FILE_DOWNLOAD_TTL_BUFFER"])
                 tmp_cache["expire"] = new_expire.strftime("%Y-%m-%d %H:%M:%S")

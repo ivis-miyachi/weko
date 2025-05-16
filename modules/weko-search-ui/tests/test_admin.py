@@ -3,15 +3,17 @@ import io
 import csv
 import os
 import json
+import ast
 import pytest
 from mock import patch, MagicMock, Mock
+from datetime import datetime, timedelta
 from flask_login import current_user
 from mock import patch
 from jinja2.exceptions import TemplateNotFound
 from flask import Flask, json, jsonify, session, url_for,current_app, make_response, request
 
 from invenio_accounts.testutils import login_user_via_session
-
+from weko_redis.redis import RedisConnection
 from weko_index_tree.models import Index
 from weko_search_ui.admin import (
     ItemManagementBulkDelete,
@@ -20,7 +22,7 @@ from weko_search_ui.admin import (
     ItemImportView,
     ItemBulkExport
 )
-
+from weko_search_ui.config import WEKO_SEARCH_UI_BULK_EXPORT_FILE_CREATE_RUN_MSG
 
 # class ItemManagementBulkDelete(BaseView):
 #     def index(self):
@@ -443,16 +445,62 @@ class TestItemBulkExport:
 
 # .tox/c1/bin/pytest --cov=weko_search_ui tests/test_admin.py::TestItemBulkExport::test_download -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-search-ui/.tox/c1/tmp
     def test_download(self, client, users, mocker, create_file_instance):
+
         url = url_for('items/bulk-export.download')
         with patch('flask_login.utils._get_user', return_value=users[3]['obj']):
             file_path = create_file_instance
+            
             # export_status is False, download_uri is not None
+            redis_connect = RedisConnection()
+            datastore = redis_connect.connection(db=current_app.config["CACHE_REDIS_DB"],kv=True)
+            file_msg = current_app.config["WEKO_ADMIN_CACHE_PREFIX"].format(
+                name=WEKO_SEARCH_UI_BULK_EXPORT_FILE_CREATE_RUN_MSG,
+                user_id=users[3]['id']
+            )
+            export_path = "/".join(create_file_instance.split("/")[:-1])
+            file_json = {"export_path":export_path}
+            datastore.put(file_msg,json.dumps(file_json).encode('utf-8'))
+            tmp_cache_key = current_app.config["WEKO_ADMIN_CACHE_TEMP_DIR_INFO_KEY_DEFAULT"]
+            buffer = current_app.config["WEKO_SEARCH_UI_FILE_DOWNLOAD_TTL_BUFFER"]
+            file_download_duration = 1000
+            
+            ## not exist expire
+            datastore.hset(tmp_cache_key,export_path,{})
             with patch('weko_search_ui.admin.get_export_status',
                        return_value=(False, file_path, '', '', '', '', '')):
                 res = client.get(url)
                 assert res.headers['Content-Disposition'].split('; ')[1].replace('filename=', '') == 'export-all.zip'
                 assert res.headers['Content-Type'] == 'application/octet-stream'
                 assert res.status_code == 200
+                res_cache = ast.literal_eval(datastore.hget(tmp_cache_key,export_path).decode("UTF-8"))
+                assert res_cache.get("expire") == None
+                
+            ## exist expire, the remaining time falls below a certain threshold.
+            expire = datetime.now()+timedelta(seconds=buffer+file_download_duration)
+            test = expire
+            datastore.hset(tmp_cache_key,export_path,{"expire":expire})
+            with patch('weko_search_ui.admin.get_export_status',
+                       return_value=(False, file_path, '', '', '', '', '')):
+                res = client.get(url)
+                assert res.headers['Content-Disposition'].split('; ')[1].replace('filename=', '') == 'export-all.zip'
+                assert res.headers['Content-Type'] == 'application/octet-stream'
+                assert res.status_code == 200
+                res_cache = ast.literal_eval(datastore.hget(tmp_cache_key,export_path).decode("UTF-8"))
+                assert res_cache.get("expire") == test
+            
+            ## exist expire, the remaining time does not fall below a certain threshold.
+            expire = datetime.now()+timedelta(seconds=buffer-file_download_duration)
+            test = expire+timedelta(seconds=buffer)
+            datastore.hset(tmp_cache_key,export_path,{"expire":expire})
+            with patch('weko_search_ui.admin.get_export_status',
+                       return_value=(False, file_path, '', '', '', '', '')):
+                res = client.get(url)
+                assert res.headers['Content-Disposition'].split('; ')[1].replace('filename=', '') == 'export-all.zip'
+                assert res.headers['Content-Type'] == 'application/octet-stream'
+                assert res.status_code == 200
+                res_cache = ast.literal_eval(datastore.hget(tmp_cache_key,export_path).decode("UTF-8"))
+                assert res_cache.get("expire") == test
+                
             # export_status is False, download_uri is None
             with patch('weko_search_ui.admin.get_export_status',
                        return_value=(False, None, '', '', '', '', '')):

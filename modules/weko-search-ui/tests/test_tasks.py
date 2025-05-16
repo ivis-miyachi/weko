@@ -140,7 +140,7 @@ def test_write_files_task(redis_connect, users, mocker):
 
     with patch('flask_login.utils._get_user', return_value=users[3]['obj']):
         mocker.patch('builtins.open', side_effect=mock_open)
-        mocker.patch('weko_search_ui.tasks.os.remove')
+        mock_remove = mocker.patch('weko_search_ui.tasks.os.remove')
         msg_key = current_app.config['WEKO_ADMIN_CACHE_PREFIX'].format(
             name='MSG_EXPORT_ALL',
             user_id=current_user.get_id()
@@ -169,6 +169,8 @@ def test_write_files_task(redis_connect, users, mocker):
                     '2': 'waiting'
                 }
             }
+            mock_remove.assert_called_with("export_path/test_path/test_file.pickle")
+        mock_remove.reset_mock()
 
         # cancel_flg is False, result of write_files is False, export_file's name doesn't include 'part'
         datastore.delete(file_cache_key)
@@ -188,7 +190,8 @@ def test_write_files_task(redis_connect, users, mocker):
                 }
             }
             assert datastore.get(msg_key).decode('utf-8') == 'Export failed.'
-
+            mock_remove.assert_called_with("export_path/test_path/test_file.pickle")
+        mock_remove.reset_mock()
         # cancel_flg is True, export_file's name doesn't include 'part'
         datastore.delete(file_cache_key)
         datastore.put(file_cache_key, json.dumps(create_file_json(True)).encode('utf-8'), ttl_secs=30)
@@ -205,7 +208,8 @@ def test_write_files_task(redis_connect, users, mocker):
                     '1': 'started'
                 }
             }
-
+            mock_remove.assert_called_with("export_path/test_path/test_file.pickle")
+        mock_remove.reset_mock()
 
 # def delete_exported_task(uri, cache_key):
 # .tox/c1/bin/pytest --cov=weko_search_ui tests/test_tasks.py::test_delete_exported_task -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-search-ui/.tox/c1/tmp

@@ -722,8 +722,10 @@ WEKO_SEARCH_UI_FILE_DOWNLOAD_TTL_BUFFER = 3600
 
 WEKO_SEARCH_UI_BULK_EXPORT_TASKID_EXPIRED_TIME = 1
 
-WEKO_SEARCH_UI_BULK_EXPORT_LIMIT = 1000
-"""The number of items exported to tsv/csv file each once."""
+WEKO_SEARCH_UI_BULK_EXPORT_LIMIT = 300
+"""The number of items exported to tsv/csv file each once.
+Note: If set to 500 or more, errors may occur during export processing.
+"""
 
 WEKO_SEARCH_UI_BULK_EXPORT_RETRY = 5
 """Number of export retries."""

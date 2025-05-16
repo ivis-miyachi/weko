@@ -50,6 +50,7 @@ from weko_search_ui.utils import (
     create_work_flow,
     defaultify,
     define_default_dict,
+    delete_exported_file,
     delete_exported,
     delete_records,
     export_all,
@@ -2325,14 +2326,26 @@ def test_export_all(db_activity, i18n_app, users, item_type, db_records2, redis_
                 mocker.patch("weko_search_ui.tasks.write_files_task", return_value=task)
                 mocker.patch('builtins.open', side_effect=unittest.mock.mock_open())
                 mocker.patch("weko_search_ui.utils.pickle.dump")
-
-                # datastore.put(uri_key, "testuri".encode('utf-8'))
-                datastore.delete(uri_key)
-                export_all(root_url, user_id, data, start_time_str)
-                msg = datastore.get(msg_key)
-                assert msg.decode() == ""
-
-                with patch("weko_search_ui.utils.delete_exported", return_value=None):
+                
+                with patch("weko_search_ui.tasks.write_files_task") as mock_write_task:
+                    with patch("weko_search_ui.utils.chain") as mock_chain:
+                        mock_apply_async = mock_chain.return_value.apply_async
+                        # datastore.put(uri_key, "testuri".encode('utf-8'))
+                        # not exist prev_uri
+                        datastore.delete(uri_key)
+                        export_all(root_url, user_id, data, start_time_str)
+                        msg = datastore.get(msg_key)
+                        assert msg.decode() == ""
+                        print(f"mock_task.called:{mock_write_task.si.call_count}")
+                        mock_chain.assert_called_once()
+                        mock_apply_async.assert_called_once()
+                
+                
+                
+                
+                
+                # exist prev_uri, exist data range
+                with patch("weko_search_ui.utils.delete_exported_file", return_value=None):
                     datastore.put(uri_key, 'test_uri'.encode('utf-8'))
                     export_all(root_url, user_id, data2, start_time_str)
                     msg = datastore.get(msg_key)
@@ -2372,16 +2385,20 @@ def test_export_all(db_activity, i18n_app, users, item_type, db_records2, redis_
                 with patch("weko_search_ui.utils.get_all_record_id", return_value=recid_data_1):
                     export_all(root_url, user_id, data, start_time_str)
 
+                    # invalid range
                     data_err = {"item_type_id": "1", "item_id_range": "10-1"}
                     export_all(root_url, user_id, data_err, start_time_str)
                     msg = datastore.get(msg_key)
                     assert msg.decode() == "Export failed. Please check item id range."
 
+                    # not exist records
                     with patch("weko_search_ui.utils.get_record_ids", return_value={}):
                         export_all(root_url, user_id, data, start_time_str)
 
-                    with patch("builtins.open", side_effect=SQLAlchemyError("Test SQLAlchemyError")):
+                    # raise sqlalchemyerror
+                    with patch("weko_search_ui.utils.get_retry_info", side_effect=SQLAlchemyError("Test SQLAlchemyError")) as mock_get_retry_info:
                         export_all(root_url, user_id, data, start_time_str)
+                        assert mock_get_retry_info.call_count == 6
 
                     with patch("weko_search_ui.tasks.write_files_task.apply_async", return_value=None):
                         with patch("weko_search_ui.utils.WekoRecord.get_record_by_uuid", side_effect=SQLAlchemyError("test_error")):
@@ -2399,14 +2416,21 @@ def test_export_all(db_activity, i18n_app, users, item_type, db_records2, redis_
 
                     with patch("weko_search_ui.utils.math.ceil", side_effect=Exception("test_error")):
                         export_all(root_url, user_id, data, start_time_str)
+                        msg = datastore.get(msg_key)
+                        assert msg.decode() == "Export failed."
 
                     # raise Exception in _get_item_type_list
                     with patch("weko_search_ui.utils.ItemTypes.get_by_id", side_effect=Exception("test_error")):
                         export_all(root_url, user_id, data, start_time_str)
+                        msg = datastore.get(msg_key)
+                        assert msg.decode() == "Export failed."
 
                     # # raise Exception in _get_export_data
                     with patch("weko_search_ui.tasks.write_files_task", side_effect=Exception("test_error")):
                         export_all(root_url, user_id, data_no_range, start_time_str)
+                        msg = datastore.get(msg_key)
+                        assert msg.decode() == "Export failed."
+
 
 
 def test_get_retry_info():
@@ -2450,8 +2474,8 @@ def test_get_retry_info():
     assert from_pid == "1"
 
 
-# def delete_exported(uri, cache_key):
-def test_delete_exported(i18n_app, file_instance_mock):
+# def delete_exported_file(uri, cache_key):
+def test_delete_exported_file(i18n_app, file_instance_mock):
     file_path = '/code/modules/weko-search-ui/tests/data/sample_file/sample_file.txt'
     
     mock_file_instance = FileInstance(uri=file_path)
@@ -2459,8 +2483,63 @@ def test_delete_exported(i18n_app, file_instance_mock):
     with patch("invenio_files_rest.models.FileInstance.get_by_uri", return_value=mock_file_instance):
         with patch("invenio_files_rest.models.FileInstance.delete", return_value=None):
             # Doesn't return any value
-            assert not delete_exported(file_path, "key")
+            assert not delete_exported_file(file_path, "key")
 
+def test_delete_exported(i18n_app, db, instance_path, redis_connect):
+    export_path = os.path.join(instance_path,"test_deleted_exported")
+    
+    uri = "test_uri"
+    cache_key = "test_cache_key"
+    task_key = "test_task_key"
+    
+    export_info = {
+        "uri":uri,
+        "cache_key":cache_key,
+        "task_key":task_key
+    }
+    
+    
+    # exist cache_key
+    os.mkdir(export_path, exist_ok=True)
+    file_instance = FileInstance(uri=uri)
+    db.session.add(file_instance)
+    db.session.commit()
+    redis_connect.put(cache_key,"test_cache")
+    redis_connect.put(task_key,"test_task")
+    result = delete_exported(export_path, export_info)
+    assert result == True
+    assert redis_connect.redis.exists(cache_key) == False
+    assert redis_connect.redis.exists(task_key) == False
+    assert FileInstance.query.filter_by(uri=uri).one_or_none() == None
+    assert os.path.isdir(export_path) == False
+    
+    # not exist cache_key
+    os.mkdir(export_path, exist_ok=True)
+    file_instance = FileInstance(uri=uri)
+    db.session.add(file_instance)
+    db.session.commit()
+    redis_connect.put(cache_key,"test_cache")
+    redis_connect.put(task_key,"test_task")
+    result = delete_exported(export_path, export_info)
+    assert result == True
+    assert redis_connect.redis.exists(cache_key) == False
+    assert redis_connect.redis.exists(task_key) == True
+    assert FileInstance.query.filter_by(uri=uri).one_or_none() == None
+    assert os.path.isdir(export_path) == False
+    
+    # raise error
+    os.mkdir(export_path, exist_ok=True)
+    file_instance = FileInstance(uri=uri)
+    db.session.add(file_instance)
+    db.session.commit()
+    redis_connect.put(cache_key,"test_cache")
+    redis_connect.put(task_key,"test_task")
+    result = delete_exported(export_path, export_info)
+    assert result == False
+    assert redis_connect.redis.exists(cache_key) == True
+    assert redis_connect.redis.exists(task_key) == True
+    assert FileInstance.query.filter_by(uri=uri).one_or_none() == True
+    assert os.path.isdir(export_path) == False
 
 # def write_files(item_datas, export_path, user_id, retrys):
 # .tox/c1/bin/pytest --cov=weko_search_ui tests/test_utils.py::test_write_files -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-search-ui/.tox/c1/tmp
