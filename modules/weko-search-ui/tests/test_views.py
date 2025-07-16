@@ -67,7 +67,8 @@ def test_search_acl_guest(app,client,db_register2,index_style,users,db_register)
         # (7, 302),
     ],
 )
-def test_search_acl(app,client,db_register2,index_style,users,db_register,id,status_code):
+def test_search_acl(app,client,db_register2,index_style,users,mocker,db_register,id,status_code):
+    mocker.patch("weko_search_ui.views.db.session.remove")
     url = url_for("weko_search_ui.search", _external=True)
     with patch("flask_login.utils._get_user", return_value=users[id]['obj']):
         with patch("flask.templating._render", return_value=""):

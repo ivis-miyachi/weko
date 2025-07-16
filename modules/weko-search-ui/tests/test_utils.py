@@ -963,7 +963,7 @@ def test_read_stats_file(i18n_app, db_itemtype, users):
         "schema": "test",
         "is_lastest": "test",
         "name": "test",
-        "item_type_id": "test",
+        "item_type_id": "1000",
     }
 
     with patch("flask_login.utils._get_user", return_value=users[3]["obj"]):

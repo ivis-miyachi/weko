@@ -149,7 +149,7 @@ class TestItemManagementBulkSearch:
             res = client.get(url)
             assert res.status == '500 INTERNAL SERVER ERROR'
 
-        url = url_for("items/search.index", item_management="sort",  _external=True)
+        url = url_for("items/search.index",  _external=True)
         with patch("flask_login.utils._get_user", return_value=user):
             with patch("flask.templating._render", return_value=""):
                 res = client.get(url, query_string={"item_management": "update"})
@@ -166,7 +166,7 @@ class TestItemManagementBulkSearch:
                 with patch("flask.templating._render", return_value=""):
                     mock_execute_search_with_pagination = mocker.patch("weko_search_ui.utils.execute_search_with_pagination")
                     mock_execute_search_with_pagination.return_value = []
-                    
+
                     # management_type is bulk delete
                     res = client.get(url, query_string={"item_management": "delete", "q": 3})
                     assert res.status == '200 OK'
@@ -174,7 +174,7 @@ class TestItemManagementBulkSearch:
                     # management_type is bulk update
                     res = client.get(url, query_string={"item_management": "update"})
                     assert res.status == '200 OK'
-                    
+
                     # management_type is not found
                     res = client.get(url)
                     assert res.status == '500 INTERNAL SERVER ERROR'

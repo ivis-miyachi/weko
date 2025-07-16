@@ -17,7 +17,7 @@ from weko_search_ui.api import (
 # get_results_setting(cls):
 def test_get_results_setting(i18n_app, users, db, app):
     from sqlalchemy.sql import func
-    
+
     test_1 = SearchManagement(
         id=1,
         default_dis_sort_index="id",
@@ -29,7 +29,7 @@ def test_get_results_setting(i18n_app, users, db, app):
             ]
         }
     )
-    
+
     assert SearchSetting.get_results_setting()[0] == app.config['RECORDS_REST_SORT_OPTIONS']
     assert SearchSetting.get_results_setting()[1] == 20
 
@@ -43,7 +43,7 @@ def test_get_results_setting(i18n_app, users, db, app):
 def test_get_default_sort(i18n_app, users, db, app):
     from sqlalchemy.sql import func
     from weko_admin import config as ad_config
-    
+
     test_1 = SearchManagement(
         id=1,
         default_dis_sort_index=json.dumps({"custom_sort": "custom_sort"}),
@@ -56,7 +56,7 @@ def test_get_default_sort(i18n_app, users, db, app):
         },
         default_dis_sort_keyword=json.dumps({"custom_sort": "custom_sort"})
     )
-    
+
     app.config["WEKO_SEARCH_TYPE_KEYWORD"] = "keyword"
 
     sort_key_str = ad_config.WEKO_ADMIN_MANAGEMENT_OPTIONS["dlt_keyword_sort_selected"]
@@ -92,9 +92,9 @@ def test_get_custom_sort(i18n_app, users, indices):
     index_id = 33
 
     assert SearchSetting.get_custom_sort(index_id, sort_type="asc")[0]['_script']['order'] == 'asc'
-    assert SearchSetting.get_custom_sort(index_id, sort_type="asc")[1]['_created']['order'] == 'desc'
+    assert SearchSetting.get_custom_sort(index_id, sort_type="asc")[1]['_created']['order'] == 'asc'
     assert SearchSetting.get_custom_sort(index_id, sort_type="desc")[0]['_script']['order'] == 'desc'
-    assert SearchSetting.get_custom_sort(index_id, sort_type="desc")[1]['_created']['order'] == 'asc'
+    assert SearchSetting.get_custom_sort(index_id, sort_type="desc")[1]['_created']['order'] == 'desc'
 
 # get_nested_sorting(cls, key_str):
 def test_get_nested_sorting(i18n_app, users, app):
@@ -134,7 +134,7 @@ def test_get_search_detail_keyword(i18n_app, users, db,redis_connect):
             ]},
         {"pid":0,"cid":"","id":"5","name":"","chidren":[]}
     ]
-    
+
     # not exist search_management
     with patch("weko_search_ui.api.Indexes.get_browsing_tree",return_value=index_tree):
         res = get_search_detail_keyword("")
@@ -146,7 +146,7 @@ def test_get_search_detail_keyword(i18n_app, users, db,redis_connect):
             assert r.get("check_val") == [{"checkStus":False,"contents":"test_index1","id":1},{"checkStus":False,"contents":"test_index2","id":2},{"checkStus":False,"contents":"test_index2/test_index2_1","id":3},{"checkStus":False,"contents":"test_index2/test_index&#39;2_2","id":4},{"checkStus":False,"contents":"","id":""}]
         if r.get("id") == "itemtype":
             assert r.get("check_val") == [{"checkStus":False,"contents":"test_itemtype01","id":"test_itemtype01"},{"checkStus":False,"contents":"test&#39;s itemtype02","id":"test&#39;s itemtype02"},{"checkStus":False,"contents":"","id":""}]
-    
+
     # exist search_management
     search_management = SearchManagement(
         search_conditions=[
@@ -166,7 +166,7 @@ def test_get_search_detail_keyword(i18n_app, users, db,redis_connect):
         {"check_val":[{"checkStus":False,"contents":"test_itemtype01","id":"test_itemtype01"},{"checkStus":False,"contents":"test&#39;s itemtype02","id":"test&#39;s itemtype02"},{"checkStus":False,"contents":"","id":""}],"contents":"アイテムタイプ","contents_value":{"en":"Item Type","ja":"アイテムタイプ"},"id":"itemtype","inputType":"checkbox_list","inputVal":"","mapping":["itemtype"]}
     ]}
     assert json.loads(res) == test
-    
+
 # def get_childinfo(index_tree, result_list=[], parename=""):
 def test_get_childinfo(i18n_app, users):
     index_tree = {

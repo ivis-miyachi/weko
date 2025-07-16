@@ -52,8 +52,7 @@ from sqlalchemy_utils.functions import create_database, database_exists, drop_da
 from werkzeug.local import LocalProxy
 from invenio_records.api import Record
 from invenio_stats.processors import EventsIndexer
-from .helpers import create_record, json_data, bagify
-
+from .helpers import json_data, bagify
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionRoles, ActionUsers
 from invenio_accounts import InvenioAccounts
@@ -1130,38 +1129,19 @@ def indices2(app, db):
 
 
 @pytest.fixture()
-def esindex(app, db_records):
-    current_search_client.indices.delete(index="test-*")
-    with open("tests/data/item-v1.0.0.json", "r") as f:
-        mapping = json.load(f)
-    try:
-        current_search_client.indices.create(
-            app.config["INDEXER_DEFAULT_INDEX"], body=mapping
-        )
-        current_search_client.indices.put_alias(
-            index=app.config["INDEXER_DEFAULT_INDEX"], name="test-weko"
-        )
-    except:
-        current_search_client.indices.create("test-weko-items", body=mapping)
-        current_search_client.indices.put_alias(
-            index="test-weko-items", name="test-weko"
-        )
+def esindex(app, es, db_records):
+
     # print(current_search_client.indices.get_alias())
 
     for depid, recid, parent, doi, record, item in db_records:
-        current_search_client.index(
-            index="test-weko-item-v1.0.0",
+        es.index(
+            index=app.config["INDEXER_DEFAULT_INDEX"],
             doc_type="item-v1.0.0",
             id=record.id,
             body=record,
             refresh="true",
         )
-
-    try:
-        yield current_search_client
-    finally:
-        current_search_client.indices.delete(index="test-*")
-
+    return es
 
 @pytest.fixture()
 def es_authors_index(app):
@@ -1811,15 +1791,26 @@ def es(app):
     Don't create template so that the test or another fixture can modify the
     enabled events.
     """
-    current_search_client.indices.delete(index="*")
-    current_search_client.indices.delete_template("*")
-    list(current_search.create())
+    current_search_client.indices.delete(index="test-*")
+    with open("tests/data/item-v1.0.0.json", "r") as f:
+        mapping = json.load(f)
+    try:
+        current_search_client.indices.create(
+            app.config["INDEXER_DEFAULT_INDEX"], body=mapping
+        )
+        current_search_client.indices.put_alias(
+            index=app.config["INDEXER_DEFAULT_INDEX"], name="test-weko"
+        )
+    except:
+        current_search_client.indices.create("test-weko-items", body=mapping)
+        current_search_client.indices.put_alias(
+            index="test-weko-items", name="test-weko"
+        )
+
     try:
         yield current_search_client
     finally:
-        current_search_client.indices.delete(index="*")
-        current_search_client.indices.delete_template("*")
-
+        current_search_client.indices.delete(index="test-*")
 
 def generate_events(
     app,
@@ -2353,20 +2344,6 @@ def item_render():
     return data
 
 
-@pytest.yield_fixture()
-def es(app):
-    """Elasticsearch fixture."""
-    try:
-        list(current_search.create())
-    # except RequestError:
-    except:
-        list(current_search.delete(ignore=[404]))
-        list(current_search.create(ignore=[400]))
-    current_search_client.indices.refresh()
-    yield current_search_client
-    list(current_search.delete(ignore=[404]))
-
-
 @pytest.fixture()
 def deposit(app, es, users, location, db):
     """New deposit with files."""
@@ -2653,8 +2630,6 @@ def es_records(app, db, db_index, location, db_itemtype, db_oaischema):
             )
 
     sleep(3)
-    es = Elasticsearch("http://{}:9200".format(app.config["SEARCH_ELASTIC_HOSTS"]))
-    # print(es.cat.indices())
     return {"indexer": indexer, "results": results}
 
 
@@ -2862,21 +2837,6 @@ def record_indexer_receiver(sender, json=None, record=None, index=None,
         json['suggest_title'] = suggest_title
 
     return json
-
-
-
-
-@pytest.yield_fixture()
-def es(app):
-    """Elasticsearch fixture."""
-    try:
-        list(current_search.create())
-    except RequestError:
-        list(current_search.delete(ignore=[404]))
-        list(current_search.create(ignore=[400]))
-    current_search_client.indices.refresh()
-    yield current_search_client
-    list(current_search.delete(ignore=[404]))
 
 
 @pytest.yield_fixture()
