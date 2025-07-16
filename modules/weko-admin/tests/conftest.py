@@ -67,6 +67,7 @@ from invenio_pidstore.models import PersistentIdentifier
 from invenio_records.ext import InvenioRecords
 from invenio_records.models import RecordMetadata
 from invenio_search import RecordsSearch,InvenioSearch,current_search_client
+from invenio_oauth2server import InvenioOAuth2Server
 
 from weko_authors import WekoAuthors
 from weko_authors.models import Authors
@@ -182,6 +183,7 @@ def base_app(instance_path, cache_config,request ,search_class):
     InvenioAccess(app_)
     InvenioAdmin(app_)
     InvenioCache(app_)
+    InvenioOAuth2Server(app_)
     InvenioPIDRelations(app_)
     InvenioPIDStore(app_)
     InvenioFilesREST(app_)
