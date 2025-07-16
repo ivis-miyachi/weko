@@ -1060,8 +1060,8 @@ class TestWekoDeposit:
         record = records[0]
         deposit = record['deposit']
         recid = record['recid']
-
-        assert deposit.merge_data_to_record_without_version(recid)
+        with patch("weko_deposit.tasks.extract_pdf_and_update_file_contents.apply_async"):
+            assert deposit.merge_data_to_record_without_version(recid)
 
     # def prepare_draft_item(self, recid):
     # .tox/c1/bin/pytest --cov=weko_deposit tests/test_api.py::TestWekoDeposit::test_prepare_draft_item -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
