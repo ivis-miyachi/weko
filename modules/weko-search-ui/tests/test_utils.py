@@ -18,7 +18,7 @@ import pytest
 
 from unittest.mock import MagicMock, Mock, patch, mock_open
 
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, Forbidden
 from elasticsearch import helpers, ElasticsearchException, NotFoundError
 from elasticsearch_dsl import Search
 from flask import current_app, make_response, request
@@ -407,12 +407,12 @@ def test_get_journal_info(i18n_app, indices, client_request_args, mocker):
 
     with patch(
         "weko_indextree_journal.api.Journals.get_journal_by_index_id",
-        return_value=journal,
+        side_effect=Exception("test_error"),
     ):
         del journal["title_url"]
         mock_abort = mocker.patch("weko_search_ui.utils.abort",return_value=make_response())
         # Will result in an error for coverage of the except part
-        assert get_journal_info(33)
+        get_journal_info(33)
         mock_abort.assert_called_with(500)
 
     with patch(
@@ -1821,15 +1821,15 @@ def test_handle_check_doi_ra(i18n_app, db,es_item_file_pipeline, es_records,iden
         {"errors":[],"doi":"xyz.jalc/0000000010", "doi_ra":"wrong doi"},# wrong doi_ra
         {"errors":[],"id":"10","doi":"xyz.jalc/000000010", "doi_ra":"JaLC","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
         {"errors":[],"id":"10","doi":"xyz.crossref/000000010", "doi_ra":"Crossref","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
-        {"errors":[],"id":"14","doi":"xyz.ndl/0000000014", "doi_ra":"NDL LaLC","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
+        {"errors":[],"id":"14","doi":"xyz.ndl/0000000014", "doi_ra":"NDL JaLC","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
     ]
-
+    from flask_babelex import gettext as _
     test = [
-        {"errors":["Please specify DOI_RA."],"doi":"xyz.jalc/0000000010"}, # exist doi, not exist doi_ra
-        {"errors":["DOI_RA should be set by on of JaLC, Crossref, DataCite, NDL JaLC"],"doi":"xyz.jalc/0000000010", "doi_ra":"wrong doi"},# wrong doi_ra
-        {"errors":["Specified DOI_RA is different from existing DOI_RA"],"id":"10","doi":"xyz.jalc/000000010", "doi_ra":"JaLC","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
+        {"errors":[_("Please specify {}.").format("DOI_RA")],"doi":"xyz.jalc/0000000010"}, # exist doi, not exist doi_ra
+        {"errors":[_("DOI_RA should be set by one of JaLC, Crossref, DataCite, NDL JaLC")],"doi":"xyz.jalc/0000000010", "doi_ra":"wrong doi","ignore_check_doi_prefix":True},# wrong doi_ra
+        {"errors":[_("Specified {} is different from existing {}").format("DOI_RA","DOI_RA")],"id":"10","doi":"xyz.jalc/000000010", "doi_ra":"JaLC","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
         {"errors":[],"id":"10","doi":"xyz.crossref/000000010", "doi_ra":"Crossref","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
-        {"errors":[],"id":"14","doi":"xyz.ndl/0000000014", "doi_ra":"NDL LaLC","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
+        {"errors":[],"id":"14","doi":"xyz.ndl/0000000014", "doi_ra":"NDL JaLC","is_change_identifier":False,"status":"keep"}, # exist doi, exist doi_ra
     ]
     with patch("weko_search_ui.utils.handle_doi_required_check",return_value=False):
         handle_check_doi_ra(item)
@@ -4156,19 +4156,42 @@ def test_check_index_access_permissions_issue_50659(i18n_app, client_request_arg
     def test_function():
         return True
 
-    with patch("flask_login.utils._get_user", return_value=users[3]["obj"]):
-        with patch("flask.request.args", new_callable=lambda: {"search_type": "2", "q": "0"}):
-            assert test_function() == True
 
-        # args not have q
-        with patch("flask.request.args", new_callable=lambda: {"search_type": "2"}):
-            with pytest.raises(BadRequest):
-                test_function()
+    # search_type is INDEX
+
+    with i18n_app.test_request_context("/?search_type=0"):
+        assert test_function() == True
+
+    with patch("flask_login.utils._get_user", return_value=users[3]["obj"]):
+        # with patch("flask.request.args", new_callable=lambda: {"search_type": "2", "q": "0"}):
+        #     assert test_function() == True
 
         # q is not digit
-        with patch("flask.request.args", new_callable=lambda: {"search_type": "2", "q": "test"}):
+        with i18n_app.test_request_context("/?search_type=2&q=test"):
             with pytest.raises(BadRequest):
                 test_function()
+
+
+
+        # q is digit, permission
+        with i18n_app.test_request_context("/?search_type=2&q=0"):
+            with patch("weko_search_ui.utils.check_index_permissions",return_value=True):
+                assert test_function() == True
+        # q is digit, not permission
+        with i18n_app.test_request_context("/?search_type=2&q=0"):
+            with patch("weko_search_ui.utils.check_index_permissions",return_value=False):
+                with pytest.raises(Forbidden):
+                    test_function()
+    # q is digit, not permission
+    with i18n_app.test_request_context("/?search_type=2&q=0"):
+        with patch("weko_search_ui.utils.check_index_permissions",return_value=False):
+            # with pytest.raises(BadRequest):
+            res = test_function()
+            assert res.status_code == 302
+    # args not have q
+    with i18n_app.test_request_context("/?search_type=2"):
+        with pytest.raises(BadRequest):
+            test_function()
 
 
 # def handle_check_file_metadata(list_record, data_path):

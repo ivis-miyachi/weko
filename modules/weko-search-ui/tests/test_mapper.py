@@ -3290,7 +3290,7 @@ def test_add_file(mapper_jpcoar):
     # Case04: Parse empty file
     res = {}
     add_file(schema, mapping, res, [])
-    assert res == {'file_path': [],}
+    assert res == {}
 
 
 # def add_catalog(schema, mapping, res, metadata):

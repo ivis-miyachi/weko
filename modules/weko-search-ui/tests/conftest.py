@@ -2414,6 +2414,7 @@ def es_records(app, db, db_index, location, db_itemtype, db_oaischema):
     indexer = WekoIndexer()
     indexer.get_es_index()
     results = []
+    item_type_id=db_itemtype["item_type"].id
     with app.test_request_context():
         for i in range(1, 10):
             record_data = {
@@ -2443,7 +2444,7 @@ def es_records(app, db, db_index, location, db_itemtype, db_oaischema):
                 },
                 "item_title": "title",
                 "author_link": [],
-                "item_type_id": "1",
+                "item_type_id": str(item_type_id),
                 "publish_date": "2022-08-20",
                 "publish_status": "1",
                 "weko_shared_id": -1,
@@ -2506,7 +2507,7 @@ def es_records(app, db, db_index, location, db_itemtype, db_oaischema):
                 "owner": "1",
                 "title": "title",
                 "owners": [1],
-                "item_type_id": 1,
+                "item_type_id": item_type_id,
                 "status": "keep",
                 "$schema": "/items/jsonschema/1",
                 "item_title": "item_title",
@@ -4478,7 +4479,9 @@ def db_rocrate_mapping(db):
 def ro_crate():
     temp_dir = tempfile.mkdtemp()
     zip_path = os.path.join(temp_dir, "crate.zip")
-    bagify("tests/data/zip_crate/", checksums=["sha256"])
-    shutil.make_archive(zip_path.replace(".zip", ""), 'zip', "tests/data/zip_crate/")
+    temp_crate_dir = os.path.join(temp_dir, "zip_crate")
+    shutil.copytree("tests/data/zip_crate/", temp_crate_dir)
+    bagify(temp_crate_dir, checksums=["sha256"])
+    shutil.make_archive(zip_path.replace(".zip", ""), 'zip', temp_crate_dir)
     yield zip_path
     shutil.rmtree(temp_dir)
