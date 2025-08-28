@@ -63,6 +63,7 @@ from invenio_jsonschemas import InvenioJSONSchemas
 from invenio_oaiserver import InvenioOAIServer
 from invenio_oaiserver.views.server import blueprint as invenio_oaiserver_blueprint
 from invenio_oaiserver.models import Identify
+from invenio_oauth2server import InvenioOAuth2Server
 from invenio_pidrelations import InvenioPIDRelations
 from invenio_pidrelations.models import PIDRelation
 from invenio_pidrelations.contrib.versioning import PIDVersioning
@@ -315,6 +316,7 @@ def base_app(instance_path):
     InvenioI18N(app_)
     InvenioTheme(app_)
     InvenioMail(app_)
+    InvenioOAuth2Server(app_)
     WekoRecords(app_)
     WekoItemsUI(app_)
     WekoRecordsUI(app_)
@@ -4003,7 +4005,7 @@ def workflows(app, db, itemtypes, users, records):
         file_name=records[1][0]["filename"],
         activity_id='',
         token='',
-        expiration_date=datetime.now()
+        expiration_date=500
     )
 
     with db.session.begin_nested():
@@ -4337,7 +4339,7 @@ def site_license_info(app, db):
         organization_name='test',
         domain_name='domain',
         mail_address='nii@nii.co.jp',
-        receive_mail_flag=False)
+        receive_mail_flag="F")
     with db.session.begin_nested():
         db.session.add(record)
     return record
