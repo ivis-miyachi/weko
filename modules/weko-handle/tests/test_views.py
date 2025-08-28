@@ -28,8 +28,12 @@ def test_index(app, client):
     url = url_for(
         "weko_handle.index", format="json", _external=True
     )
-    res = client.get(url)
-    assert res.status_code == 200
+    with patch("weko_handle.views.render_template") as mock_render:
+        mock_render.return_value = 'test'
+        res = client.get(url)
+        assert res.status_code == 200
+        assert res.data == b'test'
+        mock_render.assert_called_once_with("invenio_theme/404.html")
 
 
 # .tox/c1/bin/pytest --cov=weko_handle tests/test_views.py::test_retrieve_handle -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-handle/.tox/c1/tmp
