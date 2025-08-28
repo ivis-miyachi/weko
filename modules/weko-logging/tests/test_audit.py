@@ -26,27 +26,22 @@ def test_init_config(app):
 
 
 # def init_logger(self, app):
-# .tox/c1/bin/pytest --cov=weko_logging tests/test_audit.py::test_init_logger -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-logging
+# .tox/c1/bin/pytest --cov=weko_logging tests/test_audit.py::test_init_logger -vv -v -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-logging/.tox/c1/tmp
 def test_init_logger(app):
     test = WekoLoggingUserActivity()
-
-    # Test Case 1: When the logger is not initialized
     test.init_logger(app)
     logger_sample = logging.getLogger("user-activity")
     assert isinstance(app.extensions["weko-logging-activity"], type(logger_sample))
-    assert len(logger_sample.handlers) == 3
-    assert isinstance(logger_sample.handlers[0], UserActivityLogHandler)
-    assert logger_sample.handlers[0].level == logging.ERROR
+    assert len(logger_sample.handlers) == 2
+    
+    handler1 = logger_sample.handlers[0]
+    assert isinstance(handler1, logging.StreamHandler)
+    assert handler1.level == logging.INFO
+    assert handler1.formatter._fmt == "[%(asctime)s] - %(levelname)s - %(filename)s - %(name)s - %(funcName)s - %(message)s [in %(pathname)s:%(lineno)d]"
 
-    # Test Case 2: When the logger is initialized
-    test.init_logger(app)
-    logger_sample = logging.getLogger("user-activity")
-    assert isinstance(app.extensions["weko-logging-activity"], type(logger_sample))
-    assert len(logger_sample.handlers) == 3
-    assert isinstance(logger_sample.handlers[0], logging.StreamHandler)
-    assert logger_sample.handlers[0].level == logging.ERROR
-    assert logger_sample.handlers[0].formatter._fmt == "[%(asctime)s] - %(levelname)s - %(filename)s - %(name)s - %(funcName)s - %(message)s [in %(pathname)s:%(lineno)d]"
-
+    handler2 = logger_sample.handlers[1]
+    assert isinstance(handler2, UserActivityLogHandler)
+    assert handler2.level == logging.INFO
 
 # def get_level_from_string(level):
 # .tox/c1/bin/pytest --cov=weko_logging tests/test_audit.py::test_get_level_from_string -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-logging
