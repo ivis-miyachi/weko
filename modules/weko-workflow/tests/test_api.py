@@ -10,10 +10,12 @@ from flask_login.utils import login_user, logout_user
 from marshmallow import ValidationError
 from requests import HTTPError
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm.exc import NoResultFound
 
 from weko_notifications.notifications import Notification
 from weko_workflow.api import Flow, GetCommunity, WorkActivity, WorkFlow, UpdateItem
-from weko_workflow.models import Activity, ActivityHistory, ActivityAction, FlowAction, FlowActionRole
+from weko_workflow.models import Activity, ActivityHistory, ActivityAction, \
+    FlowAction, FlowActionRole, ActionStatusPolicy, ActivityStatusPolicy
 from weko_schema_ui.models import PublishStatus
 
 from invenio_pidstore.errors import PIDAlreadyExists
@@ -199,7 +201,7 @@ class TestWorkActivity:
             login_user(users[2]["obj"])
             activity = WorkActivity()
             activities = activity.get_all_activity_list()
-            assert len(activities) == 13
+            assert len(activities) == 15
 
 
     # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::TestWorkActivity::test_get_activity_index_search -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
@@ -219,10 +221,52 @@ class TestWorkActivity:
 
 
     # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::TestWorkActivity::test_upt_activity_detail -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-    def test_upt_activity_detail(self,app, db_register, db_records):
-        activity = WorkActivity()
-        db_activity = activity.upt_activity_detail(db_records[2][2].id)
-        assert db_activity == None
+    def test_upt_activity_detail(self,app, users, db_register, db_records):
+        with app.test_request_context():
+            login_user(users[2]["obj"])
+            work_activity = WorkActivity()
+            
+            # not exist activity
+            res = work_activity.upt_activity_detail(uuid.uuid4())
+            assert res == None
+            
+            # raise NoResultFound
+            with patch("weko_workflow.api._Action.query") as mock_query:
+                mock_query.filter_by.side_effect = NoResultFound
+                res = work_activity.upt_activity_detail(db_register["activities"][1].item_id)
+                assert res == None
+            # raise Exception
+            with patch("weko_workflow.api._Action.query") as mock_query:
+                mock_query.filter_by.side_effect = Exception
+                res = work_activity.upt_activity_detail(db_register["activities"][1].item_id)
+                assert res == None
+
+            activity = db_register["activities"][1]
+            id = activity.id
+            test_act_id = activity.activity_id
+            item_id = activity.item_id
+            
+            res = work_activity.upt_activity_detail(activity.item_id)
+            assert res.activity_id == test_act_id
+            
+            activity = Activity.query.filter_by(id=id).one()
+            assert activity.item_id == None
+            assert activity.action_id == 2
+            assert activity.action_status == ActionStatusPolicy.ACTION_SKIPPED
+            assert activity.activity_status == ActivityStatusPolicy.ACTIVITY_FINALLY
+            
+            assert ActivityHistory.query.filter_by(activity_id=test_act_id,action_id=2).one_or_none()
+            
+            
+            
+            # db_activity = activity.upt_activity_detail(db_records[2][2].id)
+            # assert db_activity.id == 4
+            # assert db_activity.action_id == 2
+            # assert db_activity.title == 'test item1'
+            # assert db_activity.activity_id == '2'
+            # assert db_activity.flow_id == 1
+            # assert db_activity.workflow_id == 1
+            # assert db_activity.action_order == 1
 
 
     # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::TestWorkActivity::test_get_corresponding_usage_activities -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
@@ -232,17 +276,7 @@ class TestWorkActivity:
         assert usage_application_list == {'activity_data_type': {}, 'activity_ids': []}
         assert output_report_list == {'activity_data_type': {}, 'activity_ids': []}
 
-    # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::TestWorkActivity::test_check_community_permission -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-    def test_check_community_permission(self,app,db_register):
-        activity = WorkActivity()
-        activities = db_register["activities"]
-        not_itemid_act = activities[0]
-        # not exist activity.item_id
-        result = WorkActivity._check_community_permission(not_itemid_act, ["1"])
 
-        assert result == True
-
-        assert 1==2
     # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::TestWorkActivity::test_query_check_path -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
     def test_query_check_path(self, db):
         index_list = ["1","2","3"]
@@ -272,100 +306,102 @@ class TestWorkActivity:
         assert result[1].json==metadatas[1]
 
     # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::TestWorkActivity::test_get_community_user_ids -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-    def test_get_community_user_ids(self,client, activity_acl_users):
-        users = activity_acl_users["users"]
-        # not login
-        result = WorkActivity._WorkActivity__get_community_user_ids()
-        assert result == []
+    def test_get_community_user_ids(self,app,client, activity_acl_users):
+        with app.test_request_context():
+            users = activity_acl_users["users"]
+            # not login
+            result = WorkActivity._WorkActivity__get_community_user_ids()
+            assert result == []
 
-        # no role
-        login_user(users[6])
-        result = WorkActivity._WorkActivity__get_community_user_ids()
-        assert result == []
+            # no role
+            login_user(users[6])
+            result = WorkActivity._WorkActivity__get_community_user_ids()
+            assert result == []
 
-        # no communities
-        login_user(users[4])
-        result = WorkActivity._WorkActivity__get_community_user_ids()
-        assert result == []
+            # no communities
+            login_user(users[4])
+            result = WorkActivity._WorkActivity__get_community_user_ids()
+            assert result == []
 
-        # exist communities
-        login_user(users[3])
-        result = WorkActivity._WorkActivity__get_community_user_ids()
-        assert result == [3,4]
+            # exist communities
+            login_user(users[3])
+            result = WorkActivity._WorkActivity__get_community_user_ids()
+            assert result == [users[2].id,users[3].id]
 
     # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::TestWorkActivity::test_get_activity_list -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-    def test_get_activity_list(client, activity_acl, activity_acl_users):
+    def test_get_activity_list(self,app,client, activity_acl, activity_acl_users):
         # {user_id:{tab:[activity_id,...],...}}
+        users = activity_acl_users["users"]
         result = {
-            1:{# sysadmin
+            users[0].id:{# sysadmin
                 "todo":[43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 28, 27, 26, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 7, 6, 5, 2, 1],
                 "wait":[5,2],
                 "all":[43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
             },
-            3:{# test_role01_user
+            users[2].id:{# test_role01_user
                 "todo":[42, 38, 37, 34, 33, 32, 31, 27, 22, 21, 19, 18, 16, 14, 5],
                 "wait":[41, 40, 39, 36, 35, 28, 26, 23, 17],
                 "all":[42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 19, 18, 17, 16, 14, 5]
             },
-            4:{# test_role01_comadmin
+            users[3].id:{# test_role01_comadmin
                 "todo":[42, 41, 40, 38, 34, 32, 26, 23, 22, 18, 16, 14, 12, 11, 10, 7, 6, 5],
                 "wait":[39, 21, 20, 19, 17, 15, 13],
                 "all":[42, 41, 40, 39, 38, 34, 32, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5]
             },
-            5:{# test_role02_user
+            users[4].id:{# test_role02_user
                 "todo":[40,35,19,15,10],
                 "wait":[],
                 "all":[40,35,19,15,10]
             },
         }
 
-        size_list = [20, 50, 75]
-        activity = WorkActivity()
-        for user_id, tag_act in result.items():
-            user = User.query.filter_by(id=user_id).one()
+        with app.test_request_context():
+            size_list = [20, 50, 75]
+            activity = WorkActivity()
+            for user_id, tag_act in result.items():
+                user = User.query.filter_by(id=user_id).one()
+                login_user(user)
+                for tab, acts in tag_act.items():
+                    for res_size in size_list:
+                        num_page = math.ceil(len(acts)/res_size)
+                        for res_page in range(num_page):
+                            res_page = res_page + 1
+                            conditions={"tab":[tab]}
+                            if res_size != 20:
+                                conditions["size{}".format(tab)]=[str(res_size)]
+                            if res_page != 1:
+                                conditions["pages{}".format(tab)]=[str(res_page)]
+                            activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions)
+                            assert [ac.id for ac in activities] == acts[res_size*(res_page-1):res_size*res_page]
+                            assert max_page == num_page
+                            assert size == str(res_size)
+                            assert page == str(res_page)
+
+                    num_page = math.ceil(len(acts)/20)
+                    conditions = {"tab":[tab]}
+                    # is_get_all = True
+                    activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions,is_get_all=True)
+                    assert [ac.id for ac in activities] == acts
+                    assert max_page == num_page
+                    assert size == '20'
+                    assert page == '1'
+
+                    # activitylog = True
+                    activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions,activitylog=True)
+                    assert [ac.id for ac in activities] == acts
+                    assert max_page == math.ceil(len(acts)/100000)
+                    assert size == 100000
+                    assert page == 1
+
+            # count = 0
+            user = users[6]
             login_user(user)
-            for tab, acts in tag_act.items():
-                for res_size in size_list:
-                    num_page = math.ceil(len(acts)/res_size)
-                    for res_page in range(num_page):
-                        res_page = res_page + 1
-                        conditions={"tab":[tab]}
-                        if res_size != 20:
-                            conditions["size{}".format(tab)]=[str(res_size)]
-                        if res_page != 1:
-                            conditions["pages{}".format(tab)]=[str(res_page)]
-                        activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions)
-                        assert [ac.id for ac in activities] == acts[res_size*(res_page-1):res_size*res_page]
-                        assert max_page == num_page
-                        assert size == str(res_size)
-                        assert page == str(res_page)
-
-                num_page = math.ceil(len(acts)/20)
-                conditions = {"tab":[tab]}
-                # is_get_all = True
-                activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions,is_get_all=True)
-                assert [ac.id for ac in activities] == acts
-                assert max_page == num_page
-                assert size == '20'
-                assert page == '1'
-
-                # activitylog = True
-                activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions,activitylog=True)
-                assert [ac.id for ac in activities] == acts
-                assert max_page == math.ceil(len(acts)/100000)
-                assert size == 100000
-                assert page == 1
-
-        # count = 0
-        user = User.query.filter_by(id=7).one()
-        login_user(user)
-        conditions={"tab":["todo"]}
-        activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions)
-        assert activities == []
-        assert max_page == 0
-        assert size == '20'
-        assert page == '1'
-        assert 1==2
+            conditions={"tab":["todo"]}
+            activities, max_page, size, page, name_param = activity.get_activity_list(conditions=conditions)
+            assert activities == []
+            assert max_page == 0
+            assert size == '20'
+            assert page == '1'
 
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::test_WorkActivity_count_waiting_approval_by_workflow_id -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
 def test_WorkActivity_count_waiting_approval_by_workflow_id(app, db, db_register):
@@ -480,19 +516,6 @@ def test_WorkActivity_get_activity_index_search(app, db_register):
         assert activity_detail.flow_id == 1
         assert activity_detail.workflow_id == 1
         assert activity_detail.action_order == 1
-
-
-# .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::test_WorkActivity_upt_activity_detail -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-def test_WorkActivity_upt_activity_detail(app, db_register, db_records):
-    activity = WorkActivity()
-    db_activity = activity.upt_activity_detail(db_records[2][2].id)
-    assert db_activity.id == 4
-    assert db_activity.action_id == 2
-    assert db_activity.title == 'test item1'
-    assert db_activity.activity_id == '2'
-    assert db_activity.flow_id == 1
-    assert db_activity.workflow_id == 1
-    assert db_activity.action_order == 1
 
 
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_api.py::test_WorkActivity_get_corresponding_usage_activities -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp

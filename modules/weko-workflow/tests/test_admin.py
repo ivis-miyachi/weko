@@ -209,18 +209,42 @@ class TestFlowSettingView:
 #     def del_flow(self, flow_id='0'):
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_admin.py::TestFlowSettingView::test_del_flow -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
     def test_del_flow(self,app,workflow):
+        # flow_id = 0
         with app.test_request_context("/admin/workflowsetting/0", method="DELETE"):
-            assert json.loads(FlowSettingView().del_flow("0").data).get("code","") == 500
-        with app.test_request_context("/admin/workflowsetting/"+str(workflow["flow"].flow_id), method="DELETE"):
-            with patch('weko_workflow.admin.FlowSettingView._check_auth',return_value=False):
+            res_data = json.loads(FlowSettingView().del_flow("0").data)
+            assert res_data == {"code": 500,"msg": "No data to delete.", 
+                                "data":{"redirect": "/admin/flowsetting/"}}
+        
+        with app.test_request_context("/admin/workflowsetting/"+
+                                      str(workflow["flow"].flow_id), 
+                                      method="DELETE"):
+            # _check_auth is false
+            with patch('weko_workflow.admin.FlowSettingView._check_auth',
+                       return_value=False):
                 with pytest.raises(Forbidden):
                     FlowSettingView().del_flow(str(workflow["flow"].flow_id))
-            with patch('weko_workflow.admin.FlowSettingView._check_auth',return_value=True):
-                assert json.loads(FlowSettingView().del_flow(str(workflow["flow"].flow_id)).data).get("code","")  == 500
+                    
+            with patch('weko_workflow.admin.FlowSettingView._check_auth',
+                       return_value=True):
+                
+                
+                # flow_detail is false
                 with patch('weko_workflow.admin.Flow.get_flow_detail',return_value=""):
-                    assert json.loads(FlowSettingView().del_flow(str(workflow["flow"].flow_id)).data).get("code","")  == 0
+                    res_data = json.loads(FlowSettingView().del_flow(str(workflow["flow"].flow_id)).data)
+                    assert res_data == {"code": 0,"msg": "", 
+                                        "data":{"redirect": "/admin/flowsetting/"}}
+                # workflows is false
                 with patch('weko_workflow.admin.WorkFlow.get_workflow_by_flow_id',return_value=[]):
-                    assert json.loads(FlowSettingView().del_flow(str(workflow["flow"].flow_id)).data).get("code","")  == 500
+                
+                    with patch('weko_workflow.admin.Flow.del_flow',
+                            return_value={'code': 0, 'msg': ''}):
+                        res_data = json.loads(FlowSettingView().del_flow(str(workflow["flow"].flow_id)).data)
+                        assert res_data == {"code": 0,"msg": "", 
+                                            "data":{"redirect": "/admin/flowsetting/"}}
+                res_data = json.loads(FlowSettingView().del_flow(str(workflow["flow"].flow_id)).data)
+                assert res_data == {"code": 500,
+                                    "msg": "Cannot be deleted because flow is used.", 
+                                    "data":{"redirect": "/admin/flowsetting/"}}
 
 #     def get_actions():
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_admin.py::TestFlowSettingView::test_get_actions -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
@@ -426,12 +450,12 @@ class TestWorkFlowSettingView:
         login(client=client, email=users[users_index]['email'])
         url = '/admin/workflowsetting/{}'.format(0)
         q = WorkFlow.query.all()
-        assert len(q) == 1
+        assert len(q) == 2
         with patch("flask.templating._render", return_value=""):
             with pytest.raises(AttributeError):
                 res =  client.post(url)
         q = WorkFlow.query.all()
-        assert len(q) == 1
+        assert len(q) == 2
 
         data = {
             "id": 1,
@@ -496,7 +520,7 @@ class TestWorkFlowSettingView:
         with patch("flask.templating._render", return_value=""):
             res = client.post(url, data=json.dumps(data), headers=[('Content-Type', 'application/json')])
         assert res.status_code == 200
-        q = WorkFlow.query.first()
+        q = WorkFlow.query.filter_by(flows_id=workflow['workflow'].flows_id).one()
         assert q.open_restricted == True
         assert q.is_gakuninrdm == True
         assert q.index_tree_id == 1
@@ -519,7 +543,7 @@ class TestWorkFlowSettingView:
             res = client.post(url, data=json.dumps(data), headers=[('Content-Type', 'application/json')])
         assert res.status_code == 200
         q = WorkFlow.query.all()
-        assert len(q) == 2
+        assert len(q) == 3
 
 
     #  def delete_workflow(self, workflow_id='0'):
@@ -652,13 +676,10 @@ class TestActivitySettingsView:
     def test_index_exception_handling(self, client, app, db_register2, users):
         """Test exception handling in ActivitySettingsView.index."""
         login(client=client, email=users[2]['email'])
-        def raise_exception(*args, **kwargs):
-            raise Exception("Test exception")
-
-        AdminSettings.get = raise_exception
-        url = url_for("activity.index", _external=True)
-        res = client.get(url)
-        assert res.status_code == 400
+        with patch("weko_workflow.admin.AdminSettings.get", side_effect=Exception("Test exception")):
+            url = url_for("activity.index", _external=True)
+            res = client.get(url)
+            assert res.status_code == 400
 
 
 

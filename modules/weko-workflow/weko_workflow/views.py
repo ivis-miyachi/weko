@@ -867,11 +867,12 @@ def display_activity(activity_id="0", community_id=None):
                 error="can not get data required for rendering")
 
     activity = WorkActivity()
-    activity_detail = activity.get_activity_detail(activity_id)
-    for_delete = activity_detail.flow_define.flow_type == WEKO_WORKFLOW_DELETION_FLOW_TYPE
 
     if "?" in activity_id:
         activity_id = activity_id.split("?")[0]
+
+    activity_detail = activity.get_activity_detail(activity_id)
+    for_delete = activity_detail.flow_define.flow_type == WEKO_WORKFLOW_DELETION_FLOW_TYPE
 
     action_endpoint, action_id, activity_detail, cur_action, histories, item, \
         steps, temporary_comment, workflow_detail = \

@@ -83,7 +83,7 @@ from sqlalchemy_utils.functions import create_database, database_exists, \
 from tests.helpers import json_data, create_record, create_activity, create_flow
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
-from sqlalchemy import event
+from sqlalchemy import func
 from invenio_files_rest.models import Location, Bucket,ObjectVersion
 from invenio_files_rest import InvenioFilesREST
 from invenio_records import InvenioRecords
@@ -155,6 +155,8 @@ class MockEs():
         pass
     def delete(self,id="",index="",doc_type="",**kwargs):
         return Response(response=json.dumps({}),status=500)
+    def update(self,index="",doc_type="",id="",version="",body=""):
+        pass
     @property
     def transport(self):
         return self.es.transport
@@ -802,26 +804,24 @@ def users(app, db):
 
 
 @pytest.fixture()
-def activity_acl_users(app, db):
+def activity_acl_users(app, db, users):
     ds = app.extensions['invenio-accounts'].datastore
 
-    sysadmin_role = ds.create_role(name='System Administrator')
-    repoadmin_role = ds.create_role(name='Repository Administrator')
-    comadmin_role = ds.create_role(name='Community Administrator')
+    sysadmin_role = Role.query.filter_by(name='System Administrator').first()
+    repoadmin_role = Role.query.filter_by(name='Repository Administrator').first()
+    comadmin_role = Role.query.filter_by(name='Community Administrator').first()
     test_role01 = ds.create_role(name='test_role01')
     test_role02 = ds.create_role(name='test_role02')
     test_role03 = ds.create_role(name='test_role03')
 
-    sysadmin = create_test_user(email='sysadmin@test.org')
-    repoadmin = create_test_user(email='repoadmin@test.org')
+    sysadmin = User.query.filter_by(email='sysadmin@test.org').first()
+    repoadmin = User.query.filter_by(email='repoadmin@test.org').first()
     test_role01_user = create_test_user(email='test_role01_user@test.org')
     test_role01_comadmin = create_test_user(email='test_role01_comadmin@test.org')
     test_role02_user = create_test_user(email='test_role02_user@test.org')
     test_role03_comadmin = create_test_user(email='test_role03_comadmin@test.org')
     no_role_user = create_test_user(email='no_role@test.org')
 
-    ds.add_role_to_user(sysadmin,sysadmin_role)
-    ds.add_role_to_user(repoadmin, repoadmin_role)
     ds.add_role_to_user(test_role01_user,test_role01)
     ds.add_role_to_user(test_role01_comadmin,test_role01)
     ds.add_role_to_user(test_role01_comadmin,comadmin_role)
@@ -836,24 +836,31 @@ def activity_acl_users(app, db):
       ┃     ┗━ com_index_child02
       ┗━ not_com_index
     """
-    indexes = [
-        Index(id=1,parent=0,position=0,index_name="com_index",display_no=5,public_state=True),
-        Index(id=2,parent=1,position=0,index_name="com_index_child01",display_no=5,public_state=True),
-        Index(id=3,parent=1,position=1,index_name="com_index_child02",display_no=5,public_state=True),
-        Index(id=4,parent=0,position=1,index_name="not_com_index",display_no=5,public_state=True)
-    ]
-    db.session.add_all(indexes)
+    max_position_root = db.session.query(func.max(Index.position)).filter_by(parent=0).scalar()
+    com_index = Index(parent=0,position=max_position_root+1,index_name="com_index",display_no=5,public_state=True)
+    not_com_index = Index(parent=0,position=max_position_root+2,index_name="not_com_index",display_no=5,public_state=True)
+    db.session.add_all([com_index,not_com_index])
     db.session.commit()
+    com_index_child01 = Index(parent=com_index.id,position=0,index_name="com_index_child01",display_no=5,public_state=True)
+    com_index_child02 = Index(parent=com_index.id,position=1,index_name="com_index_child02",display_no=5,public_state=True)
+    db.session.add_all([com_index_child01, com_index_child02])
+    db.session.commit()
+    
 
     test_role01_com = Community.create(community_id="test_role01_com", role_id=test_role01.id,
                             id_user=sysadmin.id, title="test community",
                             description=("this is test community"),
-                            root_node_id=indexes[0].id)
+                            root_node_id=com_index.id)
     db.session.commit()
     return {
         "users":[sysadmin, repoadmin, test_role01_user, test_role01_comadmin, test_role02_user, test_role03_comadmin, no_role_user],
         "roles":[sysadmin_role, repoadmin_role, comadmin_role, test_role01, test_role02, test_role03],
-        "indexes": indexes,
+        "indexes": {
+            "com_index": com_index,
+            "com_index_child01": com_index_child01,
+            "com_index_child02": com_index_child02,
+            "not_com_index": not_com_index
+        },
         "comunities":[test_role01_com]
     }
 
@@ -865,31 +872,31 @@ def workflow_with_action_role(db, action_data, item_type, activity_acl_users):
 
     workflows = []
     # no set action role(user)
-    workflows.append(create_flow(db, 1, "normal_flow","normal_workflow", None, None, item_type))
+    workflows.append(create_flow(db, 10, "normal_flow","normal_workflow", None, None, item_type))
 
     # action_role of action with action_id 1 is test_role01
-    workflows.append(create_flow(db, 2, "test_role01_role_flow","test_role01_role_workfow",{5:{"value":roles[3].id,"flg":False}},None, item_type))
+    workflows.append(create_flow(db, 11, "test_role01_role_flow","test_role01_role_workfow",{5:{"value":roles[3].id,"flg":False}},None, item_type))
 
     # action_role of action with action_id 1 is test_role02
-    workflows.append(create_flow(db, 3, "test_role02_role_flow","test_role02_role_workfow",{5:{"value":roles[4].id,"flg":False}},None,item_type))
+    workflows.append(create_flow(db, 12, "test_role02_role_flow","test_role02_role_workfow",{5:{"value":roles[4].id,"flg":False}},None,item_type))
 
     # action_role of action with action_id 1 is test_role01 and deny
-    workflows.append(create_flow(db, 4, "test_role01_role_deny_flow","test_role01_role_deny_workfow",{5:{"value":roles[3].id,"flg":True}},None,item_type))
+    workflows.append(create_flow(db, 13, "test_role01_role_deny_flow","test_role01_role_deny_workfow",{5:{"value":roles[3].id,"flg":True}},None,item_type))
 
     # action_role of action with action_id 1 is test_role02 and deny
-    workflows.append(create_flow(db, 5, "test_role02_role_deny_flow","test_role02_role_deny_workfow",{5:{"value":roles[4].id,"flg":True}},None,item_type))
+    workflows.append(create_flow(db, 14, "test_role02_role_deny_flow","test_role02_role_deny_workfow",{5:{"value":roles[4].id,"flg":True}},None,item_type))
 
     # action_user of action with action_id 1 is test_role01_user
-    workflows.append(create_flow(db, 6,"test_role01_user_flow","test_role01_user_workflow",None,{5:{"value":users[2].id,"flg":False}},item_type))
+    workflows.append(create_flow(db, 15,"test_role01_user_flow","test_role01_user_workflow",None,{5:{"value":users[2].id,"flg":False}},item_type))
 
     # action_user of action with action_id 1 is test_role02_user
-    workflows.append(create_flow(db, 7,"test_role02_user_flow","test_role02_user_workflow",None,{5:{"value":users[4].id,"flg":False}},item_type))
+    workflows.append(create_flow(db, 16,"test_role02_user_flow","test_role02_user_workflow",None,{5:{"value":users[4].id,"flg":False}},item_type))
 
     # action_user of action with action_id 1 is test_role01_user and deny
-    workflows.append(create_flow(db, 8,"test_role01_user_deny_flow","test_role01_user_deny_workflow",None,{5:{"value":users[2].id,"flg":True}},item_type))
+    workflows.append(create_flow(db, 17,"test_role01_user_deny_flow","test_role01_user_deny_workflow",None,{5:{"value":users[2].id,"flg":True}},item_type))
 
     # action_user of action with action_id 1 is test_role02_user and deny
-    workflows.append(create_flow(db, 9,"test_role02_user_deny_flow","test_role02_user_deny_workflow",None,{5:{"value":users[4].id,"flg":True}},item_type))
+    workflows.append(create_flow(db, 18,"test_role02_user_deny_flow","test_role02_user_deny_workflow",None,{5:{"value":users[4].id,"flg":True}},item_type))
     return workflows
 
 
@@ -897,50 +904,51 @@ def workflow_with_action_role(db, action_data, item_type, activity_acl_users):
 def activity_acl(db, workflow_with_action_role, activity_acl_users):
     users = activity_acl_users["users"]
     workflows = workflow_with_action_role
+    indexes = activity_acl_users["indexes"]
     activites = [
-        create_activity(db,"sysadmin_入力待ち",1,["4"],users[0],-1,workflows[0],'M',3),
-        create_activity(db,"sysadmin_承認待ち",2,["4"],users[0],-1,workflows[0],'M',4),
-        create_activity(db,"sysadmin_キャンセル",3,["4"],users[0],-1,workflows[0],'C',3),
-        create_activity(db,"sysadmin_完了",4,["4"],users[0],-1,workflows[0],'F',5),
-        create_activity(db,"sysadmin_入力中_actionrole(test_role01)",5,["4"],users[0],-1,workflows[1],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限内",6,["2"],users[3],-1,workflows[0],'M',3),
-        create_activity(db,"test_role01_comadmin_承認待ち_権限内",7,["2"],users[3],-1,workflows[0],'M',4),
-        create_activity(db,"test_role01_comadmin_キャンセル_権限内",8,["2"],users[3],-1,workflows[0],'C',3),
-        create_activity(db,"test_role01_comadmin_完了_権限内",9,["2"],users[3],-1,workflows[0],'F',5),
-        create_activity(db,"test_role01_comadmin_入力中_権限内_actionrole(test_role02)",10,["2"],users[3],-1,workflows[2],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限内_!actionrole(test_role01)",11,["2"],users[3],-1,workflows[3],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限外",12,["4"],users[3],-1,workflows[0],'M',3),
-        create_activity(db,"test_role01_comadmin_承認待ち_権限外",13,["4"],users[3],-1,workflows[0],'M',4),
-        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role01)",14,["4"],users[3],-1,workflows[1],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role02)",15,["4"],users[3],-1,workflows[2],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限外_代理(test_role01_user)",16,["4"],users[3],3,workflows[0],'M',3),
-        create_activity(db,"test_role01_comadmin_承認待ち_権限外_代理(test_role01_user)",17,["4"],users[3],3,workflows[0],'M',4),
-        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role01)_代理(test_role01_user)",18,["4"],users[3],3,workflows[1],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role02)_代理(test_role01_user)",19,["4"],users[3],3,workflows[2],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限外_!actionrole(test_role01)",20,["4"],users[3],-1,workflows[3],'M',3),
-        create_activity(db,"test_role01_comadmin_入力中_権限外_!actionrole(test_role01)_代理(test_role01_user)",21,["4"],users[3],3,workflows[3],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限内",22,["2"],users[2],-1,workflows[0],'M',3),
-        create_activity(db,"test_role01_user_承認待ち_権限内",23,["2"],users[2],-1,workflows[0],'M',4),
-        create_activity(db,"test_role01_user_キャンセル_権限内",24,["2"],users[2],-1,workflows[0],'C',3),
-        create_activity(db,"test_role01_user_完了_権限内",25,["2"],users[2],-1,workflows[0],'F',5),
-        create_activity(db,"test_role01_user_入力中_権限内_!actionrole(test_role01)",26,["2"],users[2],-1,workflows[3],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限外",27,["4"],users[2],-1,workflows[0],'M',3),
-        create_activity(db,"test_role01_user_承認待ち_権限外",28,["4"],users[2],-1,workflows[0],'M',4),
-        create_activity(db,"test_role01_user_キャンセル_権限外",29,["4"],users[2],-1,workflows[0],'C',3),
-        create_activity(db,"test_role01_user_完了_権限外",30,["4"],users[2],-1,workflows[0],'F',5),
+        create_activity(db,"sysadmin_入力待ち",1,[indexes["not_com_index"].id],users[0],-1,workflows[0],'M',3),
+        create_activity(db,"sysadmin_承認待ち",2,[indexes["not_com_index"].id],users[0],-1,workflows[0],'M',4),
+        create_activity(db,"sysadmin_キャンセル",3,[indexes["not_com_index"].id],users[0],-1,workflows[0],'C',3),
+        create_activity(db,"sysadmin_完了",4,[indexes["not_com_index"].id],users[0],-1,workflows[0],'F',5),
+        create_activity(db,"sysadmin_入力中_actionrole(test_role01)",5,[indexes["not_com_index"].id],users[0],-1,workflows[1],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限内",6,[indexes["com_index_child01"].id],users[3],-1,workflows[0],'M',3),
+        create_activity(db,"test_role01_comadmin_承認待ち_権限内",7,[indexes["com_index_child01"].id],users[3],-1,workflows[0],'M',4),
+        create_activity(db,"test_role01_comadmin_キャンセル_権限内",8,[indexes["com_index_child01"].id],users[3],-1,workflows[0],'C',3),
+        create_activity(db,"test_role01_comadmin_完了_権限内",9,[indexes["com_index_child01"].id],users[3],-1,workflows[0],'F',5),
+        create_activity(db,"test_role01_comadmin_入力中_権限内_actionrole(test_role02)",10,[indexes["com_index_child01"].id],users[3],-1,workflows[2],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限内_!actionrole(test_role01)",11,[indexes["com_index_child01"].id],users[3],-1,workflows[3],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限外",12,[indexes["not_com_index"].id],users[3],-1,workflows[0],'M',3),
+        create_activity(db,"test_role01_comadmin_承認待ち_権限外",13,[indexes["not_com_index"].id],users[3],-1,workflows[0],'M',4),
+        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role01)",14,[indexes["not_com_index"].id],users[3],-1,workflows[1],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role02)",15,[indexes["not_com_index"].id],users[3],-1,workflows[2],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限外_代理(test_role01_user)",16,[indexes["not_com_index"].id],users[3],users[2].id,workflows[0],'M',3),
+        create_activity(db,"test_role01_comadmin_承認待ち_権限外_代理(test_role01_user)",17,[indexes["not_com_index"].id],users[3],users[2].id,workflows[0],'M',4),
+        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role01)_代理(test_role01_user)",18,[indexes["not_com_index"].id],users[3],users[2].id,workflows[1],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限外_actionrole(test_role02)_代理(test_role01_user)",19,[indexes["not_com_index"].id],users[3],users[2].id,workflows[2],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限外_!actionrole(test_role01)",20,[indexes["not_com_index"].id],users[3],-1,workflows[3],'M',3),
+        create_activity(db,"test_role01_comadmin_入力中_権限外_!actionrole(test_role01)_代理(test_role01_user)",21,[indexes["not_com_index"].id],users[3],users[2].id,workflows[3],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限内",22,[indexes["com_index_child01"].id],users[2],-1,workflows[0],'M',3),
+        create_activity(db,"test_role01_user_承認待ち_権限内",23,[indexes["com_index_child01"].id],users[2],-1,workflows[0],'M',4),
+        create_activity(db,"test_role01_user_キャンセル_権限内",24,[indexes["com_index_child01"].id],users[2],-1,workflows[0],'C',3),
+        create_activity(db,"test_role01_user_完了_権限内",25,[indexes["com_index_child01"].id],users[2],-1,workflows[0],'F',5),
+        create_activity(db,"test_role01_user_入力中_権限内_!actionrole(test_role01)",26,[indexes["com_index_child01"].id],users[2],-1,workflows[3],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限外",27,[indexes["not_com_index"].id],users[2],-1,workflows[0],'M',3),
+        create_activity(db,"test_role01_user_承認待ち_権限外",28,[indexes["not_com_index"].id],users[2],-1,workflows[0],'M',4),
+        create_activity(db,"test_role01_user_キャンセル_権限外",29,[indexes["not_com_index"].id],users[2],-1,workflows[0],'C',3),
+        create_activity(db,"test_role01_user_完了_権限外",30,[indexes["not_com_index"].id],users[2],-1,workflows[0],'F',5),
         create_activity(db,"test_role01_user_入力中_権限外_index未選択",31,[],users[2],-1,workflows[0],'M',2),
-        create_activity(db,"test_role01_user_入力中_権限外_index未選択_代理(test_role01_comadmin)",32,[],users[2],4,workflows[0],'M',2),
+        create_activity(db,"test_role01_user_入力中_権限外_index未選択_代理(test_role01_comadmin)",32,[],users[2],users[3].id,workflows[0],'M',2),
         create_activity(db,"test_role01_user_入力前_権限外",33,None,users[2],-1,workflows[0],'M',2),
-        create_activity(db,"test_role01_user_入力中_権限外_actionrole(test_role01)",34,["4"],users[2],-1,workflows[1],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限外_actionrole(test_role02)",35,["4"],users[2],-1,workflows[2],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限外_!actionrole(test_role01)",36,["4"],users[2],-1,workflows[3],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限外_!actionrole(test_role02)",37,["4"],users[2],-1,workflows[4],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限外_代理(test_role01_comadmin)",38,["4"],users[2],4,workflows[0],'M',3),
-        create_activity(db,"test_role01_user_承認待ち_権限外_代理(test_role01_comadmin)",39,["4"],users[2],4,workflows[0],'M',4),
-        create_activity(db,"test_role01_user_入力中_権限外_actionrole(test_role02)_代理(test_role01_comadmin)",40,["4"],users[2],4,workflows[2],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限外_!actionrole(test_role01)_代理(test_role01_comadmin)",41,["4"],users[2],4,workflows[3],'M',3),
-        create_activity(db,"test_role01_user_入力中_権限内+外",42,["2","4"],users[2],-1,workflows[0],'M',3),
-        create_activity(db,"test_role03_comadmin_入力中_com所属なし",43,["2"],users[5],-1,workflows[0],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限外_actionrole(test_role01)",34,[indexes["not_com_index"].id],users[2],-1,workflows[1],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限外_actionrole(test_role02)",35,[indexes["not_com_index"].id],users[2],-1,workflows[2],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限外_!actionrole(test_role01)",36,[indexes["not_com_index"].id],users[2],-1,workflows[3],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限外_!actionrole(test_role02)",37,[indexes["not_com_index"].id],users[2],-1,workflows[4],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限外_代理(test_role01_comadmin)",38,[indexes["not_com_index"].id],users[2],users[3].id,workflows[0],'M',3),
+        create_activity(db,"test_role01_user_承認待ち_権限外_代理(test_role01_comadmin)",39,[indexes["not_com_index"].id],users[2],users[3].id,workflows[0],'M',4),
+        create_activity(db,"test_role01_user_入力中_権限外_actionrole(test_role02)_代理(test_role01_comadmin)",40,[indexes["not_com_index"].id],users[2],users[3].id,workflows[2],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限外_!actionrole(test_role01)_代理(test_role01_comadmin)",41,[indexes["not_com_index"].id],users[2],users[3].id,workflows[3],'M',3),
+        create_activity(db,"test_role01_user_入力中_権限内+外",42,[indexes["com_index_child01"].id,indexes["not_com_index"].id],users[2],-1,workflows[0],'M',3),
+        create_activity(db,"test_role03_comadmin_入力中_com所属なし",43,[indexes["com_index_child01"].id],users[5],-1,workflows[0],'M',3),
 
     ]
 
@@ -1111,10 +1119,11 @@ def db_register(app, db, db_records, users, action_data, item_type):
                                 flow_name='Delete Approval Flow',
                                 flow_user=1,
                                 flow_type='2')
-    with db.session.begin_nested():
-        db.session.add(flow_define)
-        db.session.add(del_flow_define)
-        db.session.add(app_flow_define)
+    db.session.add(flow_define)
+    db.session.commit()
+    db.session.add(del_flow_define)
+    db.session.commit()
+    db.session.add(app_flow_define)
     db.session.commit()
     flow_action1 = FlowAction(status='N',
                      flow_id=flow_define.flow_id,
@@ -1654,10 +1663,10 @@ def no_begin_action(app, db):
 
 @pytest.fixture()
 def workflow_open_restricted(app, db, item_type, action_data, users):
-    flow_define1 = FlowDefine(id=2,flow_id=uuid.uuid4(),
+    flow_define1 = FlowDefine(flow_id=uuid.uuid4(),
                                 flow_name='terms_of_use_only',
                                 flow_user=1)
-    flow_define2 = FlowDefine(id=3,flow_id=uuid.uuid4(),
+    flow_define2 = FlowDefine(flow_id=uuid.uuid4(),
                                 flow_name='usage application',
                                 flow_user=1)
     with db.session.begin_nested():
@@ -1738,7 +1747,7 @@ def workflow_open_restricted(app, db, item_type, action_data, users):
                         flows_name='terms_of_use_only',
                         itemtype_id=1,
                         index_tree_id=None,
-                        flow_id=2,
+                        flow_id=flow_define1.id,
                         is_deleted=False,
                         open_restricted=True,
                         location_id=None,
@@ -1747,7 +1756,7 @@ def workflow_open_restricted(app, db, item_type, action_data, users):
                         flows_name='usage application',
                         itemtype_id=1,
                         index_tree_id=None,
-                        flow_id=3,
+                        flow_id=flow_define2.id,
                         is_deleted=False,
                         open_restricted=True,
                         location_id=None,
@@ -1756,7 +1765,7 @@ def workflow_open_restricted(app, db, item_type, action_data, users):
                         flows_name='nomal workflow',
                         itemtype_id=1,
                         index_tree_id=None,
-                        flow_id=3,
+                        flow_id=flow_define2.id,
                         is_deleted=False,
                         open_restricted=False,
                         location_id=None,

@@ -927,6 +927,7 @@ def test_filter_all_condition(app, mocker):
     with app.test_request_context():
         # mocker.patch("flask.request.args.get", side_effect=dic)
         assert filter_all_condition(dic) == {
+            "action": ["action_0", "action_1"],
             "createdfrom": ["createdfrom_0", "createdfrom_1"],
             "createdto": ["createdto_0", "createdto_1"],
             "workflow": ["workflow_0", "workflow_1"],
@@ -1332,17 +1333,21 @@ def test_check_existed_doi(client,db,db_records):
 # def get_url_root():
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_utils.py::test_get_url_root --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
 def test_get_url_root(app):
+    # not Ends with /
     app.config["THEME_SITEURL"] = "https://weko3.ir.rcos.nii.ac.jp"
-    app.config["SERVER_NAME"] = "TEST_SERVER"
-    with app.app_context():
-        assert get_url_root() == "http://TEST_SERVER.localdomain/"
-        app.config["THEME_SITEURL"] = "https://weko3.ir.rcos.nii.ac.jp/"
-        assert get_url_root() == "http://TEST_SERVER.localdomain/"
-
+    res = get_url_root()
+    assert res == "https://weko3.ir.rcos.nii.ac.jp/"
+    # Ends with /
+    app.config["THEME_SITEURL"] = "https://weko3.ir.rcos.nii.ac.jp/"
+    res = get_url_root()
+    assert res == "https://weko3.ir.rcos.nii.ac.jp/"
+    
+    # exist request
     app.config["THEME_SITEURL"] = "https://weko3.ir.rcos.nii.ac.jp"
     app.config["SERVER_NAME"] = "TEST_SERVER"
     with app.test_request_context():
-        assert get_url_root() == "http://TEST_SERVER/"
+        res = get_url_root()
+        assert res == "http://TEST_SERVER/"
 
 
 # def get_record_by_root_ver(pid_value):
@@ -3254,103 +3259,105 @@ def test_update_system_data_for_activity(db_register):
 
 # def check_authority_by_admin(activity):
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_utils.py::test_check_authority_by_admin -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-def test_check_authority_by_admin(client, activity_acl, activity_acl_users):
+def test_check_authority_by_admin(app, client, activity_acl, activity_acl_users):
     users = activity_acl_users["users"]
 
-    # sysadmin user
-    login_user(users[0])
-    result = check_authority_by_admin(activity_acl[0])
-    assert result == True
+    with app.test_request_context():
+        # sysadmin user
+        login_user(users[0])
+        result = check_authority_by_admin(activity_acl[0])
+        assert result == True
 
-    # comadmin user, activity.item_id is None
-    login_user(users[3])
-    result = check_authority_by_admin(activity_acl[30])
-    assert result == False
+        # comadmin user, activity.item_id is None
+        login_user(users[3])
+        result = check_authority_by_admin(activity_acl[30])
+        assert result == False
 
-    # comadmin user, activity.item_id exist, path is not included in community index
-    login_user(users[3])
-    result = check_authority_by_admin(activity_acl[26])
-    assert result == False
+        # comadmin user, activity.item_id exist, path is not included in community index
+        login_user(users[3])
+        result = check_authority_by_admin(activity_acl[26])
+        assert result == False
 
-    # comadmin user, activity.item_id exist, path is included in community index
-    login_user(users[3])
-    result = check_authority_by_admin(activity_acl[21])
-    assert result == True
-    # not admin user
-    login_user(users[2])
-    result = check_authority_by_admin(activity_acl[21])
-    assert result == False
+        # comadmin user, activity.item_id exist, path is included in community index
+        login_user(users[3])
+        result = check_authority_by_admin(activity_acl[21])
+        assert result == True
+        # not admin user
+        login_user(users[2])
+        result = check_authority_by_admin(activity_acl[21])
+        assert result == False
 
 
 # def validate_action_role_user(activity_id, action_id, action_order):
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_utils.py::test_validate_action_role_user -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-def test_validate_action_role_user(db, activity_acl_users,workflow_with_action_role):
-    users = activity_acl_users["users"]
-    workflow = workflow_with_action_role
-    login_user(users[2])
+def test_validate_action_role_user(app, db, activity_acl_users,workflow_with_action_role):
+    with app.test_request_context():
+        users = activity_acl_users["users"]
+        workflow = workflow_with_action_role
+        login_user(users[2])
 
-    # not set action role(user)
-    activity = create_activity(db,"not_set_action_role(user)",1,["4"],users[2],-1,workflow[0],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == False
-    assert is_allow == False
-    assert is_deny == False
+        # not set action role(user)
+        activity = create_activity(db,"not_set_action_role(user)",1,["4"],users[2],-1,workflow[0],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == False
+        assert is_allow == False
+        assert is_deny == False
 
-    # set action role as allow, self is include action role
-    activity = create_activity(db,"not_set_action_role(user)",2,["4"],users[2],-1,workflow[1],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == True
-    assert is_deny == False
+        # set action role as allow, self is include action role
+        activity = create_activity(db,"not_set_action_role(user)",2,["4"],users[2],-1,workflow[1],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == True
+        assert is_deny == False
 
-    # set action role as allow, self is not include action role
-    activity = create_activity(db,"not_set_action_role(user)",3,["4"],users[2],-1,workflow[2],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == False
-    assert is_deny == True
+        # set action role as allow, self is not include action role
+        activity = create_activity(db,"not_set_action_role(user)",3,["4"],users[2],-1,workflow[2],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == False
+        assert is_deny == True
 
-    # set action role as deny, self is include action role
-    activity = create_activity(db,"not_set_action_role(user)",4,["4"],users[2],-1,workflow[3],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == False
-    assert is_deny == True
+        # set action role as deny, self is include action role
+        activity = create_activity(db,"not_set_action_role(user)",4,["4"],users[2],-1,workflow[3],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == False
+        assert is_deny == True
 
-    # set action role as deny, self is not include action role
-    activity = create_activity(db,"not_set_action_role(user)",5,["4"],users[2],-1,workflow[4],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == False
-    assert is_deny == False
+        # set action role as deny, self is not include action role
+        activity = create_activity(db,"not_set_action_role(user)",5,["4"],users[2],-1,workflow[4],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == False
+        assert is_deny == False
 
-    # set action user as allow , self is include action user
-    activity = create_activity(db,"not_set_action_role(user)",6,["4"],users[2],-1,workflow[5],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == True
-    assert is_deny == False
+        # set action user as allow , self is include action user
+        activity = create_activity(db,"not_set_action_role(user)",6,["4"],users[2],-1,workflow[5],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == True
+        assert is_deny == False
 
-    # set action user as allow , self is not include action user
-    activity = create_activity(db,"not_set_action_role(user)",7,["4"],users[2],-1,workflow[6],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == False
-    assert is_deny == True
+        # set action user as allow , self is not include action user
+        activity = create_activity(db,"not_set_action_role(user)",7,["4"],users[2],-1,workflow[6],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == False
+        assert is_deny == True
 
-    # set action user as deny , self is include action user
-    activity = create_activity(db,"not_set_action_role(user)",8,["4"],users[2],-1,workflow[7],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == False
-    assert is_deny == True
+        # set action user as deny , self is include action user
+        activity = create_activity(db,"not_set_action_role(user)",8,["4"],users[2],-1,workflow[7],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == False
+        assert is_deny == True
 
-    # set action user as deny , self is not include action user
-    activity = create_activity(db,"not_set_action_role(user)",9,["4"],users[2],-1,workflow[8],'M',3)
-    is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
-    assert is_set == True
-    assert is_allow == False
-    assert is_deny == False
+        # set action user as deny , self is not include action user
+        activity = create_activity(db,"not_set_action_role(user)",9,["4"],users[2],-1,workflow[8],'M',3)
+        is_set, is_allow, is_deny = validate_action_role_user(activity.activity_id, activity.action_id,activity.action_order)
+        assert is_set == True
+        assert is_allow == False
+        assert is_deny == False
 
 
 # def get_record_first_version(deposit):
@@ -3613,34 +3620,35 @@ def test_delete_lock_activity_cache(client,users):
     current_cache.delete(cache_key)
 
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_utils.py::test_delete_user_lock_activity_cache -vv -s -v --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp
-def test_delete_user_lock_activity_cache(client,users):
-    user = users[2]
-    login_user(user["obj"])
-    data = {
-        "is_opened": False,
-        "is_force": False,
-    }
-    activity_id = "A-22240219-00001"
-    cache_key = "workflow_userlock_activity_{}".format(user["id"])
-    current_cache.delete(cache_key)
-    # cur_locked_val is empty
-    result = delete_user_lock_activity_cache(activity_id, data)
-    assert result == "Not unlock"
-    assert current_cache.get(cache_key) == None
+def test_delete_user_lock_activity_cache(app, client, users):
+    with app.test_request_context():
+        user = users[2]
+        login_user(user["obj"])
+        data = {
+            "is_opened": False,
+            "is_force": False,
+        }
+        activity_id = "A-22240219-00001"
+        cache_key = "workflow_userlock_activity_{}".format(user["id"])
+        current_cache.delete(cache_key)
+        # cur_locked_val is empty
+        result = delete_user_lock_activity_cache(activity_id, data)
+        assert result == "Not unlock"
+        assert current_cache.get(cache_key) == None
 
-    # cur_locked_val is not empty, is_opened is True, is_force is False
-    current_cache.set(cache_key, activity_id)
-    data["is_opened"] = True
-    result = delete_user_lock_activity_cache(activity_id, data)
-    assert result == "Not unlock"
+        # cur_locked_val is not empty, is_opened is True, is_force is False
+        current_cache.set(cache_key, activity_id)
+        data["is_opened"] = True
+        result = delete_user_lock_activity_cache(activity_id, data)
+        assert result == "Not unlock"
 
-    # cur_locked_val is not empty, is_opened is True, is_force is True
-    data["is_force"] = True
-    result = delete_user_lock_activity_cache(activity_id, data)
-    assert result == "User Unlock Success"
-    assert current_cache.get(cache_key) == None
+        # cur_locked_val is not empty, is_opened is True, is_force is True
+        data["is_force"] = True
+        result = delete_user_lock_activity_cache(activity_id, data)
+        assert result == "User Unlock Success"
+        assert current_cache.get(cache_key) == None
 
-    current_cache.delete(cache_key)
+        current_cache.delete(cache_key)
 
 
 # .tox/c1/bin/pytest --cov=weko_workflow tests/test_utils.py::test_convert_to_timezone -vv -s -v --cov-branch --cov-report=term --basetemp=/code/modules/weko-workflow/.tox/c1/tmp

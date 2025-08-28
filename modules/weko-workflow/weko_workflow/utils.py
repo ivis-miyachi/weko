@@ -4266,7 +4266,7 @@ def check_authority_by_admin(activity, user=None):
                               if i.cid not in index_ids]
             dep = WekoDeposit.get_record(item_id)
 
-            path = dep.get('path',[])
+            path = dep.get('path',[]) if dep else []
             for p in path:
                 if str(p) in index_ids:
                     is_admin = True

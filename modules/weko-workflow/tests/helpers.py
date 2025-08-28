@@ -169,7 +169,7 @@ def create_activity(db, item_title, recid, path, login_user, shared_user, workfl
     now_action = actions[action_order-1]
     activity_id=f"A-00000001-{recid:05}"
     item_id = item_id if record_metadata else None
-    activity = Activity(id=recid,activity_id=activity_id,item_id=item_id,workflow_id=workflow.id,flow_id=workflow.flow_id,
+    activity = Activity(activity_id=activity_id,item_id=item_id,workflow_id=workflow.id,flow_id=workflow.flow_id,
                         action_id=now_action.action_id,action_status=status,activity_status=status,
                         activity_login_user=login_user.id,activity_update_user=login_user.id,
                         activity_start=datetime.strptime('2024/01/11 3:01:53.931', '%Y/%m/%d %H:%M:%S.%f'),
