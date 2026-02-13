@@ -1,5 +1,6 @@
 import click
 from datetime import datetime
+from flask.cli import with_appcontext
 from invenio_db import db
 
 @click.group()
@@ -13,8 +14,9 @@ def partition():
     pass
 
 @partition.command('create')
-@click.argument('year', ngargs=1,type=int)
+@click.argument('year', nargs=1,type=int)
 @click.argument('month', default=0,type=int)
+@with_appcontext
 def _partition_create(year, month):
     """Create partition table for user activity logs.
 
