@@ -1,0 +1,430 @@
+{
+    "pubdate": "yyyy-mm-dd",
+    "item_1617186331708": [
+        {
+            "subitem_1551255647225": "",
+            "subitem_1551255648112": ""
+        }
+    ],
+    "item_1617186385884": [
+        {
+            "subitem_1551255720400": "",
+            "subitem_1551255721061": ""
+        }
+    ],
+    "item_1617186419668": [
+        {
+            "iscreator": "",
+            "givenNames": [
+                {
+                    "givenName": "",
+                    "givenNameLang": ""
+                }
+            ],
+            "familyNames": [
+                {
+                    "familyName": "",
+                    "familyNameLang": ""
+                }
+            ],
+            "creatorMails": [
+                {
+                    "creatorMail": ""
+                }
+            ],
+            "creatorNames": [
+                {
+                    "creatorName": "",
+                    "creatorNameLang": ""
+                }
+            ],
+            "nameIdentifiers": [
+                {
+                    "nameIdentifier": "",
+                    "nameIdentifierURI": "",
+                    "nameIdentifierScheme": ""
+                }
+            ],
+            "creatorAffiliations": [
+                {
+                    "affiliationNames": [
+                        {
+                            "affiliationName": "",
+                            "affiliationNameLang": ""
+                        }
+                    ],
+                    "affiliationNameIdentifiers": [
+                        {
+                            "affiliationNameIdentifier": "",
+                            "affiliationNameIdentifierURI": "",
+                            "affiliationNameIdentifierScheme": ""
+                        }
+                    ]
+                }
+            ],
+            "creatorAlternatives": [
+                {
+                    "creatorAlternative": "",
+                    "creatorAlternativeLang": ""
+                }
+            ]
+        }
+    ],
+    "item_1617186476635": {
+        "subitem_1522299639480": "",
+        "subitem_1600958577026": ""
+    },
+    "item_1617186499011": [
+        {
+            "subitem_1522650717957": "",
+            "subitem_1522650727486": "",
+            "subitem_1522651041219": ""
+        }
+    ],
+    "item_1617186609386": [
+        {
+            "subitem_1522299896455": "",
+            "subitem_1522300014469": "",
+            "subitem_1522300048512": "",
+            "subitem_1523261968819": ""
+        }
+    ],
+    "item_1617186626617": [
+        {
+            "subitem_description": "",
+            "subitem_description_type": "",
+            "subitem_description_language": ""
+        }
+    ],
+    "item_1617186643794": [
+        {
+            "subitem_1522300295150": "",
+            "subitem_1522300316516": ""
+        }
+    ],
+    "item_1617186660861": [
+        {
+            "subitem_1522300695726": "",
+            "subitem_1522300722591": "yyyy-mm-dd"
+        }
+    ],
+    "item_1617186702042": [
+        {
+            "subitem_1551255818386": ""
+        }
+    ],
+    "item_1617186783814": [
+        {
+            "subitem_identifier_uri": "",
+            "subitem_identifier_type": ""
+        }
+    ],
+    "item_1617186859717": [
+        {
+            "subitem_1522658018441": "",
+            "subitem_1522658031721": ""
+        }
+    ],
+    "item_1617186882738": [
+        {
+            "subitem_geolocation_box": {
+                "subitem_east_longitude": "",
+                "subitem_north_latitude": "",
+                "subitem_south_latitude": "",
+                "subitem_west_longitude": ""
+            },
+            "subitem_geolocation_place": [
+                {
+                    "subitem_geolocation_place_text": ""
+                }
+            ],
+            "subitem_geolocation_point": {
+                "subitem_point_latitude": "",
+                "subitem_point_longitude": ""
+            }
+        }
+    ],
+    "item_1617186901218": [
+        {
+            "subitem_1522399143519": {
+                "subitem_1522399281603": "",
+                "subitem_1522399333375": ""
+            },
+            "subitem_1522399412622": [
+                {
+                    "subitem_1522399416691": "",
+                    "subitem_1522737543681": ""
+                }
+            ],
+            "subitem_1522399571623": {
+                "subitem_1522399585738": "",
+                "subitem_1522399628911": ""
+            },
+            "subitem_1522399651758": [
+                {
+                    "subitem_1522721910626": "",
+                    "subitem_1522721929892": ""
+                }
+            ]
+        }
+    ],
+    "item_1617186920753": [
+        {
+            "subitem_1522646500366": "",
+            "subitem_1522646572813": ""
+        }
+    ],
+    "item_1617186941041": [
+        {
+            "subitem_1522650068558": "",
+            "subitem_1522650091861": ""
+        }
+    ],
+    "item_1617186959569": {
+        "subitem_1551256328147": ""
+    },
+    "item_1617186981471": {
+        "subitem_1551256294723": ""
+    },
+    "item_1617186994930": {
+        "subitem_1551256248092": ""
+    },
+    "item_1617187024783": {
+        "subitem_1551256198917": ""
+    },
+    "item_1617187045071": {
+        "subitem_1551256185532": ""
+    },
+    "item_1617187056579": {
+        "bibliographicPageEnd": "",
+        "bibliographic_titles": [
+            {
+                "bibliographic_title": "",
+                "bibliographic_titleLang": ""
+            }
+        ],
+        "bibliographicPageStart": "",
+        "bibliographicIssueDates": {
+            "bibliographicIssueDate": "yyyy-mm-dd",
+            "bibliographicIssueDateType": ""
+        },
+        "bibliographicIssueNumber": "",
+        "bibliographicVolumeNumber": "",
+        "bibliographicNumberOfPages": ""
+    },
+    "item_1617187087799": {
+        "subitem_1551256171004": ""
+    },
+    "item_1617187112279": [
+        {
+            "subitem_1551256126428": "",
+            "subitem_1551256129013": ""
+        }
+    ],
+    "item_1617187136212": {
+        "subitem_1551256096004": "yyyy-mm-dd"
+    },
+    "item_1617187187528": [
+        {
+            "subitem_1599711633003": [
+                {
+                    "subitem_1599711636923": "",
+                    "subitem_1599711645590": ""
+                }
+            ],
+            "subitem_1599711655652": "",
+            "subitem_1599711660052": [
+                {
+                    "subitem_1599711680082": "",
+                    "subitem_1599711686511": ""
+                }
+            ],
+            "subitem_1599711699392": {
+                "subitem_1599711704251": "",
+                "subitem_1599711712451": "",
+                "subitem_1599711727603": "",
+                "subitem_1599711731891": "",
+                "subitem_1599711735410": "",
+                "subitem_1599711739022": "",
+                "subitem_1599711743722": "",
+                "subitem_1599711745532": ""
+            },
+            "subitem_1599711758470": [
+                {
+                    "subitem_1599711769260": "",
+                    "subitem_1599711775943": ""
+                }
+            ],
+            "subitem_1599711788485": [
+                {
+                    "subitem_1599711798761": "",
+                    "subitem_1599711803382": ""
+                }
+            ],
+            "subitem_1599711813532": ""
+        }
+    ],
+    "item_1617258105262": {
+        "resourceuri": "",
+        "resourcetype": ""
+    },
+    "item_1617265215918": {
+        "subitem_1522305645492": "",
+        "subitem_1600292170262": ""
+    },
+    "item_1617349709064": [
+        {
+            "givenNames": [
+                {
+                    "givenName": "",
+                    "givenNameLang": ""
+                }
+            ],
+            "familyNames": [
+                {
+                    "familyName": "",
+                    "familyNameLang": ""
+                }
+            ],
+            "contributorType": "",
+            "nameIdentifiers": [
+                {
+                    "nameIdentifier": "",
+                    "nameIdentifierURI": "",
+                    "nameIdentifierScheme": ""
+                }
+            ],
+            "contributorMails": [
+                {
+                    "contributorMail": ""
+                }
+            ],
+            "contributorNames": [
+                {
+                    "lang": "",
+                    "contributorName": ""
+                }
+            ],
+            "contributorAffiliations": [
+                {
+                    "contributorAffiliationNames": [
+                        {
+                            "contributorAffiliationName": "",
+                            "contributorAffiliationNameLang": ""
+                        }
+                    ],
+                    "contributorAffiliationNameIdentifiers": [
+                        {
+                            "contributorAffiliationURI": "",
+                            "contributorAffiliationScheme": "",
+                            "contributorAffiliationNameIdentifier": ""
+                        }
+                    ]
+                }
+            ],
+            "contributorAlternatives": [
+                {
+                    "contributorAlternative": "",
+                    "contributorAlternativeLang": ""
+                }
+            ]
+        }
+    ],
+    "item_1617349808926": {
+        "subitem_1523263171732": ""
+    },
+    "item_1617351524846": {
+        "subitem_1523260933860": ""
+    },
+    "item_1617353299429": [
+        {
+            "subitem_1522306207484": "",
+            "subitem_1522306287251": {
+                "subitem_1522306382014": "",
+                "subitem_1522306436033": ""
+            },
+            "subitem_1523320863692": [
+                {
+                    "subitem_1523320867455": "",
+                    "subitem_1523320909613": ""
+                }
+            ]
+        }
+    ],
+    "item_1617605131499": [
+        {
+            "url": {
+                "url": "",
+                "label": "",
+                "objectType": ""
+            },
+            "date": [
+                {
+                    "dateType": "",
+                    "dateValue": "yyyy-mm-dd"
+                }
+            ],
+            "format": "",
+            "groups": "",
+            "version": "",
+            "fileDate": [
+                {
+                    "fileDateType": "",
+                    "fileDateValue": "yyyy-mm-dd"
+                }
+            ],
+            "filename": "",
+            "filesize": [
+                {
+                    "value": ""
+                }
+            ],
+            "accessrole": "",
+            "displaytype": "",
+            "licensefree": "",
+            "licensetype": ""
+        }
+    ],
+    "item_1617610673286": [
+        {
+            "nameIdentifiers": [
+                {
+                    "nameIdentifier": "",
+                    "nameIdentifierURI": "",
+                    "nameIdentifierScheme": ""
+                }
+            ],
+            "rightHolderNames": [
+                {
+                    "rightHolderName": "",
+                    "rightHolderLanguage": ""
+                }
+            ]
+        }
+    ],
+    "item_1617620223087": [
+        {
+            "subitem_1565671149650": "",
+            "subitem_1565671169640": "",
+            "subitem_1565671178623": ""
+        }
+    ],
+    "item_1617944105607": [
+        {
+            "subitem_1551256015892": [
+                {
+                    "subitem_1551256027296": "",
+                    "subitem_1551256029891": ""
+                }
+            ],
+            "subitem_1551256037922": [
+                {
+                    "subitem_1551256042287": "",
+                    "subitem_1551256047619": ""
+                }
+            ]
+        }
+    ],
+    "$schema": "/items/jsonschema/15",
+    "shared_user_id": -1
+}

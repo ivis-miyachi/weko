@@ -1,0 +1,2634 @@
+{
+    "pubdate": {
+        "type": "date",
+        "min": "1000-01-01",
+        "max": "2999-12-31"
+    },
+    "item_1617186331708": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1551255647225": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_1551255648112": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Kana",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186385884": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1551255720400": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_1551255721061": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Kana",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186419668": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "iscreator": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "givenNames": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "givenName": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "givenNameLang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "familyNames": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "familyName": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "familyNameLang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "creatorMails": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "creatorMail": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                },
+                "creatorNames": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "creatorName": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "creatorNameLang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "nameIdentifiers": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "nameIdentifier": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "nameIdentifierURI": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "nameIdentifierScheme": {
+                                "type": "select",
+                                "options": []
+                            }
+                        }
+                    }
+                },
+                "creatorAffiliations": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "affiliationNames": {
+                                "type": "list",
+                                "items": {
+                                    "type": "dict",
+                                    "properties": {
+                                        "affiliationName": {
+                                            "type": "string",
+                                            "min": 1,
+                                            "max": 255
+                                        },
+                                        "affiliationNameLang": {
+                                            "type": "select",
+                                            "options": [
+                                                null,
+                                                "ja",
+                                                "ja-Kana",
+                                                "ja-Latn",
+                                                "en",
+                                                "fr",
+                                                "it",
+                                                "de",
+                                                "es",
+                                                "zh-cn",
+                                                "zh-tw",
+                                                "ru",
+                                                "la",
+                                                "ms",
+                                                "eo",
+                                                "ar",
+                                                "el",
+                                                "ko"
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "affiliationNameIdentifiers": {
+                                "type": "list",
+                                "items": {
+                                    "type": "dict",
+                                    "properties": {
+                                        "affiliationNameIdentifier": {
+                                            "type": "string",
+                                            "min": 1,
+                                            "max": 255
+                                        },
+                                        "affiliationNameIdentifierURI": {
+                                            "type": "string",
+                                            "min": 1,
+                                            "max": 255
+                                        },
+                                        "affiliationNameIdentifierScheme": {
+                                            "type": "select",
+                                            "options": [
+                                                null,
+                                                "kakenhi",
+                                                "ISNI",
+                                                "Ringgold",
+                                                "GRID"
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "creatorAlternatives": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "creatorAlternative": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "creatorAlternativeLang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186476635": {
+        "type": "pair",
+        "keys": [
+            "subitem_1522299639480",
+            "subitem_1600958577026"
+        ],
+        "pairs": [
+            [
+                null,
+                ""
+            ],
+            [
+                "embargoed access",
+                "http://purl.org/coar/access_right/c_f1cf"
+            ],
+            [
+                "metadata only access",
+                "http://purl.org/coar/access_right/c_14cb"
+            ],
+            [
+                "open access",
+                "http://purl.org/coar/access_right/c_abf2"
+            ],
+            [
+                "restricted access",
+                "http://purl.org/coar/access_right/c_16ec"
+            ]
+        ]
+    },
+    "item_1617186499011": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522650717957": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                },
+                "subitem_1522650727486": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_1522651041219": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186609386": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522299896455": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Kana",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                },
+                "subitem_1522300014469": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "BSH",
+                        "DDC",
+                        "LCC",
+                        "LCSH",
+                        "MeSH",
+                        "NDC",
+                        "NDLC",
+                        "NDLSH",
+                        "SciVal",
+                        "UDC",
+                        "Other"
+                    ]
+                },
+                "subitem_1522300048512": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_1523261968819": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186626617": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_description": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_description_type": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "Abstract",
+                        "Methods",
+                        "TableOfContents",
+                        "TechnicalInfo",
+                        "Other"
+                    ]
+                },
+                "subitem_description_language": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186643794": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522300295150": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                },
+                "subitem_1522300316516": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186660861": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522300695726": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "Accepted",
+                        "Available",
+                        "Collected",
+                        "Copyrighted",
+                        "Created",
+                        "Issued",
+                        "Submitted",
+                        "Updated",
+                        "Valid"
+                    ]
+                },
+                "subitem_1522300722591": {
+                    "type": "date",
+                    "min": "1000-01-01",
+                    "max": "2999-12-31"
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186702042": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1551255818386": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "jpn",
+                        "eng",
+                        "fra",
+                        "ita",
+                        "spa",
+                        "zho",
+                        "rus",
+                        "lat",
+                        "msa",
+                        "epo",
+                        "ara",
+                        "ell",
+                        "kor"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186783814": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_identifier_uri": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_identifier_type": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "DOI",
+                        "HDL",
+                        "URI"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186859717": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522658018441": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                },
+                "subitem_1522658031721": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186882738": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_geolocation_box": {
+                    "type": "dict",
+                    "properties": {
+                        "subitem_east_longitude": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_north_latitude": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_south_latitude": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_west_longitude": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        }
+                    }
+                },
+                "subitem_geolocation_place": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_geolocation_place_text": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                },
+                "subitem_geolocation_point": {
+                    "type": "dict",
+                    "properties": {
+                        "subitem_point_latitude": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_point_longitude": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        }
+                    }
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186901218": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522399143519": {
+                    "type": "dict",
+                    "properties": {
+                        "subitem_1522399281603": {
+                            "type": "select",
+                            "options": [
+                                null,
+                                "Crossref Funder",
+                                "GRID",
+                                "ISNI",
+                                "Other",
+                                "kakenhi"
+                            ]
+                        },
+                        "subitem_1522399333375": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        }
+                    }
+                },
+                "subitem_1522399412622": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1522399416691": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            },
+                            "subitem_1522737543681": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                },
+                "subitem_1522399571623": {
+                    "type": "dict",
+                    "properties": {
+                        "subitem_1522399585738": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1522399628911": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        }
+                    }
+                },
+                "subitem_1522399651758": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1522721910626": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            },
+                            "subitem_1522721929892": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186920753": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522646500366": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "PISSN",
+                        "EISSN",
+                        "ISSN",
+                        "NCID"
+                    ]
+                },
+                "subitem_1522646572813": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186941041": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522650068558": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                },
+                "subitem_1522650091861": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617186959569": {
+        "type": "dict",
+        "properties": {
+            "subitem_1551256328147": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617186981471": {
+        "type": "dict",
+        "properties": {
+            "subitem_1551256294723": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617186994930": {
+        "type": "dict",
+        "properties": {
+            "subitem_1551256248092": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617187024783": {
+        "type": "dict",
+        "properties": {
+            "subitem_1551256198917": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617187045071": {
+        "type": "dict",
+        "properties": {
+            "subitem_1551256185532": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617187056579": {
+        "type": "dict",
+        "properties": {
+            "bibliographicPageEnd": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            },
+            "bibliographic_titles": {
+                "type": "list",
+                "items": {
+                    "type": "dict",
+                    "properties": {
+                        "bibliographic_title": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "bibliographic_titleLang": {
+                            "type": "select",
+                            "options": [
+                                null,
+                                "ja",
+                                "ja-Latn",
+                                "en",
+                                "fr",
+                                "it",
+                                "de",
+                                "es",
+                                "zh-cn",
+                                "zh-tw",
+                                "ru",
+                                "la",
+                                "ms",
+                                "eo",
+                                "ar",
+                                "el",
+                                "ko"
+                            ]
+                        }
+                    }
+                }
+            },
+            "bibliographicPageStart": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            },
+            "bibliographicIssueDates": {
+                "type": "dict",
+                "properties": {
+                    "bibliographicIssueDate": {
+                        "type": "date",
+                        "min": "1000-01-01",
+                        "max": "2999-12-31"
+                    },
+                    "bibliographicIssueDateType": {
+                        "type": "select",
+                        "options": [
+                            null,
+                            "Issued"
+                        ]
+                    }
+                }
+            },
+            "bibliographicIssueNumber": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            },
+            "bibliographicVolumeNumber": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            },
+            "bibliographicNumberOfPages": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617187087799": {
+        "type": "dict",
+        "properties": {
+            "subitem_1551256171004": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617187112279": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1551256126428": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_1551256129013": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617187136212": {
+        "type": "dict",
+        "properties": {
+            "subitem_1551256096004": {
+                "type": "date",
+                "min": "1000-01-01",
+                "max": "2999-12-31"
+            }
+        }
+    },
+    "item_1617187187528": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1599711633003": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1599711636923": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "subitem_1599711645590": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "subitem_1599711655652": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_1599711660052": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1599711680082": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "subitem_1599711686511": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "subitem_1599711699392": {
+                    "type": "dict",
+                    "properties": {
+                        "subitem_1599711704251": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1599711712451": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1599711727603": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1599711731891": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1599711735410": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1599711739022": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1599711743722": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "subitem_1599711745532": {
+                            "type": "select",
+                            "options": [
+                                null,
+                                "ja",
+                                "ja-Latn",
+                                "en",
+                                "fr",
+                                "it",
+                                "de",
+                                "es",
+                                "zh-cn",
+                                "zh-tw",
+                                "ru",
+                                "la",
+                                "ms",
+                                "eo",
+                                "ar",
+                                "el",
+                                "ko"
+                            ]
+                        }
+                    }
+                },
+                "subitem_1599711758470": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1599711769260": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "subitem_1599711775943": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "subitem_1599711788485": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1599711798761": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "subitem_1599711803382": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "subitem_1599711813532": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "JPN",
+                        "ABW",
+                        "AFG",
+                        "AGO",
+                        "AIA",
+                        "ALA",
+                        "ALB",
+                        "AND",
+                        "ARE",
+                        "ARG",
+                        "ARM",
+                        "ASM",
+                        "ATA",
+                        "ATF",
+                        "ATG",
+                        "AUS",
+                        "AUT",
+                        "AZE",
+                        "BDI",
+                        "BEL",
+                        "BEN",
+                        "BES",
+                        "BFA",
+                        "BGD",
+                        "BGR",
+                        "BHR",
+                        "BHS",
+                        "BIH",
+                        "BLM",
+                        "BLR",
+                        "BLZ",
+                        "BMU",
+                        "BOL",
+                        "BRA",
+                        "BRB",
+                        "BRN",
+                        "BTN",
+                        "BVT",
+                        "BWA",
+                        "CAF",
+                        "CAN",
+                        "CCK",
+                        "CHE",
+                        "CHL",
+                        "CHN",
+                        "CIV",
+                        "CMR",
+                        "COD",
+                        "COG",
+                        "COK",
+                        "COL",
+                        "COM",
+                        "CPV",
+                        "CRI",
+                        "CUB",
+                        "CUW",
+                        "CXR",
+                        "CYM",
+                        "CYP",
+                        "CZE",
+                        "DEU",
+                        "DJI",
+                        "DMA",
+                        "DNK",
+                        "DOM",
+                        "DZA",
+                        "ECU",
+                        "EGY",
+                        "ERI",
+                        "ESH",
+                        "ESP",
+                        "EST",
+                        "ETH",
+                        "FIN",
+                        "FJI",
+                        "FLK",
+                        "FRA",
+                        "FRO",
+                        "FSM",
+                        "GAB",
+                        "GBR",
+                        "GEO",
+                        "GGY",
+                        "GHA",
+                        "GIB",
+                        "GIN",
+                        "GLP",
+                        "GMB",
+                        "GNB",
+                        "GNQ",
+                        "GRC",
+                        "GRD",
+                        "GRL",
+                        "GTM",
+                        "GUF",
+                        "GUM",
+                        "GUY",
+                        "HKG",
+                        "HMD",
+                        "HND",
+                        "HRV",
+                        "HTI",
+                        "HUN",
+                        "IDN",
+                        "IMN",
+                        "IND",
+                        "IOT",
+                        "IRL",
+                        "IRN",
+                        "IRQ",
+                        "ISL",
+                        "ISR",
+                        "ITA",
+                        "JAM",
+                        "JEY",
+                        "JOR",
+                        "KAZ",
+                        "KEN",
+                        "KGZ",
+                        "KHM",
+                        "KIR",
+                        "KNA",
+                        "KOR",
+                        "KWT",
+                        "LAO",
+                        "LBN",
+                        "LBR",
+                        "LBY",
+                        "LCA",
+                        "LIE",
+                        "LKA",
+                        "LSO",
+                        "LTU",
+                        "LUX",
+                        "LVA",
+                        "MAC",
+                        "MAF",
+                        "MAR",
+                        "MCO",
+                        "MDA",
+                        "MDG",
+                        "MDV",
+                        "MEX",
+                        "MHL",
+                        "MKD",
+                        "MLI",
+                        "MLT",
+                        "MMR",
+                        "MNE",
+                        "MNG",
+                        "MNP",
+                        "MOZ",
+                        "MRT",
+                        "MSR",
+                        "MTQ",
+                        "MUS",
+                        "MWI",
+                        "MYS",
+                        "MYT",
+                        "NAM",
+                        "NCL",
+                        "NER",
+                        "NFK",
+                        "NGA",
+                        "NIC",
+                        "NIU",
+                        "NLD",
+                        "NOR",
+                        "NPL",
+                        "NRU",
+                        "NZL",
+                        "OMN",
+                        "PAK",
+                        "PAN",
+                        "PCN",
+                        "PER",
+                        "PHL",
+                        "PLW",
+                        "PNG",
+                        "POL",
+                        "PRI",
+                        "PRK",
+                        "PRT",
+                        "PRY",
+                        "PSE",
+                        "PYF",
+                        "QAT",
+                        "REU",
+                        "ROU",
+                        "RUS",
+                        "RWA",
+                        "SAU",
+                        "SDN",
+                        "SEN",
+                        "SGP",
+                        "SGS",
+                        "SHN",
+                        "SJM",
+                        "SLB",
+                        "SLE",
+                        "SLV",
+                        "SMR",
+                        "SOM",
+                        "SPM",
+                        "SRB",
+                        "SSD",
+                        "STP",
+                        "SUR",
+                        "SVK",
+                        "SVN",
+                        "SWE",
+                        "SWZ",
+                        "SXM",
+                        "SYC",
+                        "SYR",
+                        "TCA",
+                        "TCD",
+                        "TGO",
+                        "THA",
+                        "TJK",
+                        "TKL",
+                        "TKM",
+                        "TLS",
+                        "TON",
+                        "TTO",
+                        "TUN",
+                        "TUR",
+                        "TUV",
+                        "TWN",
+                        "TZA",
+                        "UGA",
+                        "UKR",
+                        "UMI",
+                        "URY",
+                        "USA",
+                        "UZB",
+                        "VAT",
+                        "VCT",
+                        "VEN",
+                        "VGB",
+                        "VIR",
+                        "VNM",
+                        "VUT",
+                        "WLF",
+                        "WSM",
+                        "YEM",
+                        "ZAF",
+                        "ZMB",
+                        "ZWE"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617258105262": {
+        "type": "pair",
+        "keys": [
+            "resourcetype",
+            "resourceuri"
+        ],
+        "pairs": [
+            [
+                null,
+                ""
+            ],
+            [
+                "conference paper",
+                "http://purl.org/coar/resource_type/c_5794"
+            ],
+            [
+                "data paper",
+                "http://purl.org/coar/resource_type/c_beb9"
+            ],
+            [
+                "departmental bulletin paper",
+                "http://purl.org/coar/resource_type/c_6501"
+            ],
+            [
+                "editorial",
+                "http://purl.org/coar/resource_type/c_b239"
+            ],
+            [
+                "journal article",
+                "http://purl.org/coar/resource_type/c_6501"
+            ],
+            [
+                "newspaper",
+                "http://purl.org/coar/resource_type/c_2fe3"
+            ],
+            [
+                "periodical",
+                "http://purl.org/coar/resource_type/c_2659"
+            ],
+            [
+                "review article",
+                "http://purl.org/coar/resource_type/c_dcae04bc"
+            ],
+            [
+                "software paper",
+                "http://purl.org/coar/resource_type/c_7bab"
+            ],
+            [
+                "article",
+                "http://purl.org/coar/resource_type/c_6501"
+            ],
+            [
+                "book",
+                "http://purl.org/coar/resource_type/c_2f33"
+            ],
+            [
+                "book part",
+                "http://purl.org/coar/resource_type/c_3248"
+            ],
+            [
+                "cartographic material",
+                "http://purl.org/coar/resource_type/c_12cc"
+            ],
+            [
+                "map",
+                "http://purl.org/coar/resource_type/c_12cd"
+            ],
+            [
+                "conference object",
+                "http://purl.org/coar/resource_type/c_c94f"
+            ],
+            [
+                "conference proceedings",
+                "http://purl.org/coar/resource_type/c_f744"
+            ],
+            [
+                "conference poster",
+                "http://purl.org/coar/resource_type/c_6670"
+            ],
+            [
+                "aggregated data",
+                "http://purl.org/coar/resource_type/ACF7-8YT9"
+            ],
+            [
+                "clinical trial data",
+                "http://purl.org/coar/resource_type/c_cb28"
+            ],
+            [
+                "compiled data",
+                "http://purl.org/coar/resource_type/FXF3-D3G7"
+            ],
+            [
+                "encoded data",
+                "http://purl.org/coar/resource_type/AM6W-6QAW"
+            ],
+            [
+                "experimental data",
+                "http://purl.org/coar/resource_type/63NG-B465"
+            ],
+            [
+                "genomic data",
+                "http://purl.org/coar/resource_type/A8F1-NPV9"
+            ],
+            [
+                "geospatial data",
+                "http://purl.org/coar/resource_type/2H0M-X761"
+            ],
+            [
+                "laboratory notebook",
+                "http://purl.org/coar/resource_type/H41Y-FW7B"
+            ],
+            [
+                "measurement and test data",
+                "http://purl.org/coar/resource_type/DD58-GFSX"
+            ],
+            [
+                "observational data",
+                "http://purl.org/coar/resource_type/FF4C-28RK"
+            ],
+            [
+                "recorded data",
+                "http://purl.org/coar/resource_type/CQMR-7K63"
+            ],
+            [
+                "simulation data",
+                "http://purl.org/coar/resource_type/W2XT-7017"
+            ],
+            [
+                "survey data",
+                "http://purl.org/coar/resource_type/NHD0-W6SY"
+            ],
+            [
+                "dataset",
+                "http://purl.org/coar/resource_type/c_ddb1"
+            ],
+            [
+                "interview",
+                "http://purl.org/coar/resource_type/c_26e4"
+            ],
+            [
+                "image",
+                "http://purl.org/coar/resource_type/c_c513"
+            ],
+            [
+                "still image",
+                "http://purl.org/coar/resource_type/c_ecc8"
+            ],
+            [
+                "moving image",
+                "http://purl.org/coar/resource_type/c_8a7e"
+            ],
+            [
+                "video",
+                "http://purl.org/coar/resource_type/c_12ce"
+            ],
+            [
+                "lecture",
+                "http://purl.org/coar/resource_type/c_8544"
+            ],
+            [
+                "patent",
+                "http://purl.org/coar/resource_type/c_15cd"
+            ],
+            [
+                "internal report",
+                "http://purl.org/coar/resource_type/c_18ww"
+            ],
+            [
+                "report",
+                "http://purl.org/coar/resource_type/c_93fc"
+            ],
+            [
+                "research report",
+                "http://purl.org/coar/resource_type/c_18ws"
+            ],
+            [
+                "technical report",
+                "http://purl.org/coar/resource_type/c_18gh"
+            ],
+            [
+                "policy report",
+                "http://purl.org/coar/resource_type/c_186u"
+            ],
+            [
+                "report part",
+                "http://purl.org/coar/resource_type/c_ba1f"
+            ],
+            [
+                "working paper",
+                "http://purl.org/coar/resource_type/c_8042"
+            ],
+            [
+                "data management plan",
+                "http://purl.org/coar/resource_type/c_ab20"
+            ],
+            [
+                "sound",
+                "http://purl.org/coar/resource_type/c_18cc"
+            ],
+            [
+                "thesis",
+                "http://purl.org/coar/resource_type/c_46ec"
+            ],
+            [
+                "bachelor thesis",
+                "http://purl.org/coar/resource_type/c_7a1f"
+            ],
+            [
+                "master thesis",
+                "http://purl.org/coar/resource_type/c_bdcc"
+            ],
+            [
+                "doctoral thesis",
+                "http://purl.org/coar/resource_type/c_db06"
+            ],
+            [
+                "interactive resource",
+                "http://purl.org/coar/resource_type/c_e9a0"
+            ],
+            [
+                "learning object",
+                "http://purl.org/coar/resource_type/c_e059"
+            ],
+            [
+                "manuscript",
+                "http://purl.org/coar/resource_type/c_0040"
+            ],
+            [
+                "musical notation",
+                "http://purl.org/coar/resource_type/c_18cw"
+            ],
+            [
+                "research proposal",
+                "http://purl.org/coar/resource_type/c_baaf"
+            ],
+            [
+                "software",
+                "http://purl.org/coar/resource_type/c_5ce6"
+            ],
+            [
+                "technical documentation",
+                "http://purl.org/coar/resource_type/c_71bd"
+            ],
+            [
+                "workflow",
+                "http://purl.org/coar/resource_type/c_393c"
+            ],
+            [
+                "other",
+                "http://purl.org/coar/resource_type/c_1843"
+            ]
+        ]
+    },
+    "item_1617265215918": {
+        "type": "pair",
+        "keys": [
+            "subitem_1522305645492",
+            "subitem_1600292170262"
+        ],
+        "pairs": [
+            [
+                null,
+                ""
+            ],
+            [
+                "AO",
+                "http://purl.org/coar/version/c_b1a7d7d4d402bcce"
+            ],
+            [
+                "SMUR",
+                "http://purl.org/coar/version/c_71e4c1898caa6e32"
+            ],
+            [
+                "AM",
+                "http://purl.org/coar/version/c_ab4af688f83e57aa"
+            ],
+            [
+                "P",
+                "http://purl.org/coar/version/c_fa2ee174bc00049f"
+            ],
+            [
+                "VoR",
+                "http://purl.org/coar/version/c_970fb48d4fbd8a85"
+            ],
+            [
+                "CVoR",
+                "http://purl.org/coar/version/c_e19f295774971610"
+            ],
+            [
+                "EVoR",
+                "http://purl.org/coar/version/c_dc82b40f9837b551"
+            ],
+            [
+                "NA",
+                "http://purl.org/coar/version/c_be7fb7dd8ff6fe43"
+            ]
+        ]
+    },
+    "item_1617349709064": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "givenNames": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "givenName": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "givenNameLang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "familyNames": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "familyName": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "familyNameLang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "contributorType": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ContactPerson",
+                        "DataCollector",
+                        "DataCurator",
+                        "DataManager",
+                        "Distributor",
+                        "Editor",
+                        "HostingInstitution",
+                        "Producer",
+                        "ProjectLeader",
+                        "ProjectManager",
+                        "ProjectMember",
+                        "RelatedPerson",
+                        "Researcher",
+                        "ResearchGroup",
+                        "Sponsor",
+                        "Supervisor",
+                        "WorkPackageLeader",
+                        "Other"
+                    ]
+                },
+                "nameIdentifiers": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "nameIdentifier": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "nameIdentifierURI": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "nameIdentifierScheme": {
+                                "type": "select",
+                                "options": []
+                            }
+                        }
+                    }
+                },
+                "contributorMails": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "contributorMail": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                },
+                "contributorNames": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "lang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            },
+                            "contributorName": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                },
+                "contributorAffiliations": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "contributorAffiliationNames": {
+                                "type": "list",
+                                "items": {
+                                    "type": "dict",
+                                    "properties": {
+                                        "contributorAffiliationName": {
+                                            "type": "string",
+                                            "min": 1,
+                                            "max": 255
+                                        },
+                                        "contributorAffiliationNameLang": {
+                                            "type": "select",
+                                            "options": [
+                                                null,
+                                                "ja",
+                                                "ja-Kana",
+                                                "ja-Latn",
+                                                "en",
+                                                "fr",
+                                                "it",
+                                                "de",
+                                                "es",
+                                                "zh-cn",
+                                                "zh-tw",
+                                                "ru",
+                                                "la",
+                                                "ms",
+                                                "eo",
+                                                "ar",
+                                                "el",
+                                                "ko"
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "contributorAffiliationNameIdentifiers": {
+                                "type": "list",
+                                "items": {
+                                    "type": "dict",
+                                    "properties": {
+                                        "contributorAffiliationURI": {
+                                            "type": "string",
+                                            "min": 1,
+                                            "max": 255
+                                        },
+                                        "contributorAffiliationScheme": {
+                                            "type": "select",
+                                            "options": [
+                                                null,
+                                                "kakenhi",
+                                                "ISNI",
+                                                "Ringgold",
+                                                "GRID"
+                                            ]
+                                        },
+                                        "contributorAffiliationNameIdentifier": {
+                                            "type": "string",
+                                            "min": 1,
+                                            "max": 255
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "contributorAlternatives": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "contributorAlternative": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "contributorAlternativeLang": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617349808926": {
+        "type": "dict",
+        "properties": {
+            "subitem_1523263171732": {
+                "type": "string",
+                "min": 1,
+                "max": 255
+            }
+        }
+    },
+    "item_1617351524846": {
+        "type": "dict",
+        "properties": {
+            "subitem_1523260933860": {
+                "type": "select",
+                "options": [
+                    null,
+                    "Paid",
+                    "Fully waived",
+                    "Not required",
+                    "Partially waived",
+                    "Not charged",
+                    "Unknown"
+                ]
+            }
+        }
+    },
+    "item_1617353299429": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1522306207484": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "isVersionOf",
+                        "hasVersion",
+                        "isPartOf",
+                        "hasPart",
+                        "isReferencedBy",
+                        "references",
+                        "isFormatOf",
+                        "hasFormat",
+                        "isReplacedBy",
+                        "replaces",
+                        "isRequiredBy",
+                        "requires",
+                        "isSupplementTo",
+                        "isSupplementedBy",
+                        "isIdenticalTo",
+                        "isDerivedFrom",
+                        "isSourceOf",
+                        "isCitedBy",
+                        "Cites"
+                    ]
+                },
+                "subitem_1522306287251": {
+                    "type": "dict",
+                    "properties": {
+                        "subitem_1522306382014": {
+                            "type": "select",
+                            "options": [
+                                null,
+                                "ARK",
+                                "arXiv",
+                                "DOI",
+                                "HDL",
+                                "ICHUSHI",
+                                "ISBN",
+                                "J-GLOBAL",
+                                "Local",
+                                "PISSN",
+                                "EISSN",
+                                "ISSN【非推奨】",
+                                "NAID",
+                                "NCID",
+                                "PMID",
+                                "PURL",
+                                "SCOPUS",
+                                "URI",
+                                "WOS"
+                            ]
+                        },
+                        "subitem_1522306436033": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        }
+                    }
+                },
+                "subitem_1523320863692": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1523320867455": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            },
+                            "subitem_1523320909613": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617605131499": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "url": {
+                    "type": "dict",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "label": {
+                            "type": "string",
+                            "min": 1,
+                            "max": 255
+                        },
+                        "objectType": {
+                            "type": "select",
+                            "options": [
+                                null,
+                                "abstract",
+                                "summary",
+                                "fulltext",
+                                "thumbnail",
+                                "other"
+                            ]
+                        }
+                    }
+                },
+                "date": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "dateType": {
+                                "type": "select",
+                                "options": []
+                            },
+                            "dateValue": {
+                                "type": "date",
+                                "min": "1000-01-01",
+                                "max": "2999-12-31"
+                            }
+                        }
+                    }
+                },
+                "format": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "groups": {
+                    "type": "select",
+                    "options": []
+                },
+                "version": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "fileDate": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "fileDateType": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "Accepted",
+                                    "Collected",
+                                    "Copyrighted",
+                                    "Created",
+                                    "Issued",
+                                    "Submitted",
+                                    "Updated",
+                                    "Valid"
+                                ]
+                            },
+                            "fileDateValue": {
+                                "type": "date",
+                                "min": "1000-01-01",
+                                "max": "2999-12-31"
+                            }
+                        }
+                    }
+                },
+                "filename": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "filesize": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "value": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            }
+                        }
+                    }
+                },
+                "accessrole": {
+                    "type": "select",
+                    "options": [
+                        "open_access",
+                        "open_date",
+                        "open_login",
+                        "open_no"
+                    ]
+                },
+                "displaytype": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "detail",
+                        "simple",
+                        "preview"
+                    ]
+                },
+                "licensefree": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "licensetype": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "license_free",
+                        "license_12",
+                        "license_6",
+                        "license_7",
+                        "license_8",
+                        "license_9",
+                        "license_10",
+                        "license_11",
+                        "license_0",
+                        "license_1",
+                        "license_2",
+                        "license_3",
+                        "license_4",
+                        "license_5"
+                    ]
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617610673286": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "nameIdentifiers": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "nameIdentifier": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "nameIdentifierURI": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "nameIdentifierScheme": {
+                                "type": "select",
+                                "options": []
+                            }
+                        }
+                    }
+                },
+                "rightHolderNames": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "rightHolderName": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "rightHolderLanguage": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Kana",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617620223087": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1565671149650": {
+                    "type": "select",
+                    "options": [
+                        null,
+                        "ja",
+                        "ja-Kana",
+                        "ja-Latn",
+                        "en",
+                        "fr",
+                        "it",
+                        "de",
+                        "es",
+                        "zh-cn",
+                        "zh-tw",
+                        "ru",
+                        "la",
+                        "ms",
+                        "eo",
+                        "ar",
+                        "el",
+                        "ko"
+                    ]
+                },
+                "subitem_1565671169640": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                },
+                "subitem_1565671178623": {
+                    "type": "string",
+                    "min": 1,
+                    "max": 255
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "item_1617944105607": {
+        "type": "list",
+        "items": {
+            "type": "dict",
+            "properties": {
+                "subitem_1551256015892": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1551256027296": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "subitem_1551256029891": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "kakenhi"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "subitem_1551256037922": {
+                    "type": "list",
+                    "items": {
+                        "type": "dict",
+                        "properties": {
+                            "subitem_1551256042287": {
+                                "type": "string",
+                                "min": 1,
+                                "max": 255
+                            },
+                            "subitem_1551256047619": {
+                                "type": "select",
+                                "options": [
+                                    null,
+                                    "ja",
+                                    "ja-Latn",
+                                    "en",
+                                    "fr",
+                                    "it",
+                                    "de",
+                                    "es",
+                                    "zh-cn",
+                                    "zh-tw",
+                                    "ru",
+                                    "la",
+                                    "ms",
+                                    "eo",
+                                    "ar",
+                                    "el",
+                                    "ko"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "min": 1,
+        "max": 9999
+    },
+    "$schema": "/items/jsonschema/15",
+    "shared_user_id": -1
+}

@@ -1,0 +1,200 @@
+.nav {
+    margin-bottom: 0;
+    padding-left: 0;
+    list-style: none;
+  }
+  .nav:after,
+  .nav:before {
+    content: " ";
+    display: table
+  }
+  .nav > li {
+    display: block;
+  }
+  .nav > li > button,
+  .nav > li > span > button {
+    display: block;
+    padding: 10px 15px;
+  }
+  .nav > li > button:hover,
+  .nav > li > button:focus,
+  .nav > li > span > button:hover,
+  .nav > li > span > button:focus {
+    text-decoration: none;
+    background-color: #eeeeee;
+  }
+  .nav > li.disabled > button,
+  .nav > li.disabled > span > button {
+    color: #777777;
+  }
+  .nav > li.disabled > button:hover,
+  .nav > li.disabled > button:focus,
+  .nav > li.disabled > span > button:hover,
+  .nav > li.disabled > span > button:focus {
+    color: #777777;
+    text-decoration: none;
+    background-color: transparent;
+    cursor: not-allowed;
+  }
+  .nav .open > button,
+  .nav .open > button:hover,
+  .nav .open > button:focus,
+  .nav .open > span > button,
+  .nav .open > span > button:hover,
+  .nav .open > span > button:focus {
+    background-color: #eeeeee;
+    border-color: #337ab7;
+  }
+  .nav .nav-divider {
+    height: 1px;
+    margin: 9px 0;
+    overflow: hidden;
+    background-color: #e5e5e5;
+  }
+  .nav-tabs {
+    border-bottom: 1px solid #dddddd;
+  }
+  .nav-tabs > li {
+    float: left;
+    margin-bottom: -1px;
+  }
+  .nav-tabs > li > button,
+  .nav-tabs > li > span > button {
+    color: #3c8dbc;
+    /*border-color: transparent transparent #dddddd;*/
+    background-color: #ffffff;
+    margin-right: 2px;
+    line-height: 1.42857143;
+    border: none;
+    /*border-bottom: 1px solid #dddddd;*/
+    border-radius: 4px 4px 0 0;
+  }
+  .nav-tabs > li > button:hover,
+  .nav-tabs > li > span > button:hover {
+    color: #555555;
+    background-color: #f4f4f4;
+    border-color: #eeeeee #eeeeee #dddddd;
+  }
+  .nav-tabs > li.active > button,
+  .nav-tabs > li.active > button:hover,
+  .nav-tabs > li.active > button:focus,
+  .nav-tabs > li.active > span > button,
+  .nav-tabs > li.active > span > button:hover,
+  .nav-tabs > li.active > span > button:focus {
+    color: #555555;
+    background-color: #ffffff;
+    border: 1px solid #dddddd;
+    border-bottom-color: transparent;
+    cursor: default;
+  }
+  .nav > li > button > img,
+  .nav > li > span > button > img {
+    max-width: none;
+  }
+  .nav-tabs.nav-justified {
+    width: 100%;
+    border-bottom: 0;
+  }
+  .nav-tabs.nav-justified > li {
+    float: none;
+  }
+  .nav-tabs.nav-justified > li > button,
+  .nav-tabs.nav-justified > li > span > button {
+    text-align: center;
+    margin-bottom: 5px;
+  }
+  .nav-tabs.nav-justified > .dropdown .dropdown-menu {
+    top: auto;
+    left: auto;
+  }
+  @media (min-width: 768px) {
+    .nav-tabs.nav-justified > li {
+      display: table-cell;
+      width: 1%;
+    }
+    .nav-tabs.nav-justified > li > button,
+    .nav-tabs.nav-justified > li > span > button {
+      margin-bottom: 0;
+    }
+  }
+  .nav-tabs.nav-justified > li > button,
+  .nav-tabs.nav-justified > li > span > button {
+    margin-right: 0;
+    border-radius: 4px;
+  }
+  .nav-tabs.nav-justified > .active > button,
+  .nav-tabs.nav-justified > .active > button:hover,
+  .nav-tabs.nav-justified > .active > button:focus {
+    border: 1px solid #dddddd;
+  }
+  @media (min-width: 768px) {
+    .nav-tabs.nav-justified > li > button,
+    .nav-tabs.nav-justified > li > span > button {
+      border-bottom: 1px solid #dddddd;
+      border-radius: 4px 4px 0 0;
+    }
+    .nav-tabs.nav-justified > .active > button,
+    .nav-tabs.nav-justified > .active > button:hover,
+    .nav-tabs.nav-justified > .active > button:focus {
+      border-bottom-color: #ffffff;
+    }
+  }
+
+  .pagination > li > button {
+    position: relative;
+    float: left;
+    padding: 6px 12px;
+    line-height: 1.42857143;
+    text-decoration: none;
+    color: #666666;
+    background-color: #fafafa;
+    border: 1px solid #dddddd;
+    margin-left: -1px;
+  }
+  
+  .pagination > li:first-child > button {
+    margin-left: 0;
+    border-bottom-left-radius: 4px;
+    border-top-left-radius: 4px;
+  }
+  
+  .pagination > li:last-child > button {
+    border-bottom-right-radius: 4px;
+    border-top-right-radius: 4px;
+  }
+  
+  .pagination > li > button:hover,
+  .pagination > li > button:focus {
+    z-index: 2;
+    color: #23527c;
+    background-color: #eeeeee;
+    border-color: #dddddd;
+  }
+  
+  .pagination > .active > button,
+  .pagination > .active > button:hover,
+  .pagination > .active > button:focus {
+    z-index: 3;
+    color: #ffffff;
+    background-color: #337ab7;
+    border-color: #337ab7;
+    cursor: default;
+  }
+  
+  .pagination > .disabled > button,
+  .pagination > .disabled > button:hover,
+  .pagination > .disabled > button:focus {
+    color: #777777;
+    background-color: #ffffff;
+    border-color: #dddddd;
+    cursor: not-allowed;
+  }
+
+  td > button.icon {
+    color: black;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    padding-block: 0;
+    padding-inline: 0;
+  }
