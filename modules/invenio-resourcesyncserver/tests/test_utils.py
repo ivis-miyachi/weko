@@ -4,10 +4,10 @@ import copy
 import pytest
 import unittest
 import datetime
-from mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock, Mock
 from flask import current_app, make_response, request
 from flask_login import current_user
-from flask_babelex import Babel
+from flask_babel import Babel
 
 from invenio_resourcesyncserver.api import ResourceListHandler, ChangeListHandler
 from invenio_resourcesyncserver.utils import (
@@ -32,7 +32,7 @@ def sample_ResourceListHandler():
     test.created = "test"
     test.updated = "test"
     test.index = "test"
-    
+
     return test
 
 
@@ -47,7 +47,7 @@ def sample_ChangeListHandler(key):
             test = ChangeListHandler(
                 change_tracking_state=["test"]
             )
-        
+
         test.id = "test"
         test.status = "test"
         test.repository_id = "Root Index"
@@ -61,7 +61,7 @@ def sample_ChangeListHandler(key):
         test.interval_by_date = 2
 
         return test
-    
+
     return _func(key)
 
 
@@ -126,7 +126,7 @@ def test_query_record_changes(i18n_app, db, search_result, indices, es):
                         max_changes_size=max_changes_size,
                         change_tracking_state=change_tracking_state
                     )) == 1
-    
+
     data1[0]["_source"]["control_number"] = 1
 
     with patch("invenio_resourcesyncserver.utils.get_item_changes_by_index", return_value=data1):

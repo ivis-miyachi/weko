@@ -26,7 +26,7 @@ import pytest
 import uuid
 from flask import url_for
 from unittest.mock import patch, MagicMock
-from elasticsearch.exceptions import NotFoundError
+from invenio_search.engine import search
 from invenio_indexer.api import RecordIndexer
 
 from invenio_accounts.testutils import login_user_via_session
@@ -353,7 +353,7 @@ def test_delete_author_acl_users(client, users, index, is_permission):
 @pytest.mark.parametrize('base_app',[dict(
     is_es=True
 )],indirect=['base_app'])
-def test_delete_author(client, db,users, esindex, create_author, mocker):
+def test_delete_author(client, db,users, esindex, create_author):
     """
     Test of delete author data.
     :param client: The flask client.
@@ -368,7 +368,7 @@ def test_delete_author(client, db,users, esindex, create_author, mocker):
 
     login_user_via_session(client=client, email=users[0]['email'])
     url = url_for("weko_authors.delete_author")
-    mocker.patch("weko_authors.views.get_count_item_link", return_value=0)
+    patch("weko_authors.views.get_count_item_link", return_value=0)
 
     id = 1
     es_id = create_author(json.loads(json.dumps(test_data)), id)
@@ -378,7 +378,7 @@ def test_delete_author(client, db,users, esindex, create_author, mocker):
     assert res.status_code == 200
     result = Authors.query.filter_by(id=id).one()
     assert result.is_deleted == True
-    res = current_search_client.get(index=current_app.config["WEKO_AUTHORS_ES_INDEX_NAME"],doc_type=current_app.config['WEKO_AUTHORS_ES_DOC_TYPE'],id=es_id)
+    res = current_search_client.get(index=current_app.config["WEKO_AUTHORS_ES_INDEX_NAME"],id=es_id)
     assert res["_source"]["is_deleted"] == "true"
 
     id = 2
@@ -390,7 +390,7 @@ def test_delete_author(client, db,users, esindex, create_author, mocker):
         assert res.status_code == 500
         result = Authors.query.filter_by(id=id).one()
         assert result.is_deleted == False
-        res = current_search_client.get(index=current_app.config["WEKO_AUTHORS_ES_INDEX_NAME"],doc_type=current_app.config['WEKO_AUTHORS_ES_DOC_TYPE'],id=es_id)
+        res = current_search_client.get(index=current_app.config["WEKO_AUTHORS_ES_INDEX_NAME"],id=es_id)
         assert res["_source"]["is_deleted"] == "false"
 
     # author is linked to items
@@ -453,7 +453,7 @@ def test_get(client, users):
     class MockClient():
         def __init__(self,data):
             self.data = data
-        def search(self,index=None,doc_type=None, body=None):
+        def search(self,index=None, body=None):
             return self.data[index]
     url = url_for("weko_authors.get")
     login_user_via_session(client=client, email=users[0]['email'])
@@ -595,7 +595,7 @@ def test_getById_acl_users(client,users, index, is_permission):
         assert_role(res, is_permission)
 
 # .tox/c1/bin/pytest --cov=weko_authors tests/test_views.py::test_getById -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-def test_getById(client, users, mocker):
+def test_getById(client, users):
     """
     Test of get author data by id.
     :param client: The flask client.
@@ -603,14 +603,14 @@ def test_getById(client, users, mocker):
     class MockClient:
         def __init__(self,data):
             self.data = data
-        def search(self,index=None,doc_type=None,body=None):
+        def search(self,index=None,body=None):
             return self.data
     login_user_via_session(client=client, email=users[0]['email'])
     url = url_for("weko_authors.getById")
 
     record_indexer = RecordIndexer()
     record_indexer.client=MockClient({"test":"test_search_result"})
-    mocker.patch("weko_authors.views.RecordIndexer",return_value=record_indexer)
+    patch("weko_authors.views.RecordIndexer",return_value=record_indexer)
 
     # search_key is none
     input = {}
@@ -666,7 +666,7 @@ def test_mapping(client, users, authors_prefix_settings, authors_affiliation_set
     class MockClient:
         def __init__(self, value):
             self.data = value
-        def get(self,index=None,doc_type=None,id=None):
+        def get(self,index=None,id=None):
             return self.data
     input = {"id": "1"}
     data = {
@@ -867,7 +867,7 @@ def test_gatherById(client, users, authors):
         def search(self,index=None, body=None):
             id = body["query"]["match"]["_id"]
             return self.data[index][id]
-        def update(self,index=None,doc_type=None,id=None,body=None):
+        def update(self,index=None,id=None,body=None):
             pass
 
     input = {
@@ -1682,4 +1682,3 @@ def test_dbsession_clean(app, db):
     db.session.add(itemtype_name3)
     dbsession_clean(Exception)
     assert ItemTypeName.query.filter_by(id=3).first() is None
-

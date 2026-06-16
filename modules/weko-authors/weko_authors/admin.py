@@ -31,7 +31,7 @@ from flask import abort, current_app, request, session, send_file
 from flask.helpers import url_for
 from flask.json import jsonify
 from flask_admin import BaseView, expose
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_security import current_user
 from invenio_files_rest.models import FileInstance
 from invenio_cache import current_cache

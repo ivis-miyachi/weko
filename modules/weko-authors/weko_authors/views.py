@@ -25,7 +25,7 @@ import sys
 import traceback
 import uuid
 from flask import Response, Blueprint, current_app, json, jsonify, make_response, request
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import login_required
 from flask_security import current_user
 from invenio_communities.models import Community
@@ -180,7 +180,6 @@ def delete_author():
         RecordIndexer().client.update(
             id=json.loads(json.dumps(data))["Id"],
             index=current_app.config['WEKO_AUTHORS_ES_INDEX_NAME'],
-            doc_type=current_app.config['WEKO_AUTHORS_ES_DOC_TYPE'],
             body={'doc': {'is_deleted': 'true'}}
         )
 
@@ -230,12 +229,12 @@ def get():
         "query": query,
         "from": offset,
         "size": size,
-        "sort": sort
+        "sort": sort,
+        "track_total_hits": True
     }
     indexer = RecordIndexer()
     result = indexer.client.search(
         index=current_app.config['WEKO_AUTHORS_ES_INDEX_NAME'],
-        doc_type=current_app.config['WEKO_AUTHORS_ES_DOC_TYPE'],
         body=body
     )
 
@@ -275,19 +274,21 @@ def get():
         author_id_info = es_hit['_source']['authorIdInfo']
         pk_id = es_hit['_source']['pk_id']
         if pk_id and author_id_info:
-            author_id = author_id_info[0]['authorId']
             temp_str = json.dumps(query_item).replace(
                 "@author_id", pk_id)
             result_itemCnt = indexer.client.search(
-                index=current_app.config['SEARCH_UI_SEARCH_INDEX'],
+                index=(
+                    current_app.config["SEARCH_INDEX_PREFIX"]
+                     + current_app.config["SEARCH_UI_SEARCH_INDEX"]
+                ),
                 body=json.loads(temp_str)
             )
             if result_itemCnt \
                     and result_itemCnt['hits'] \
-                    and result_itemCnt['hits']['total']:
+                    and result_itemCnt['hits']['total']['value']:
                 item_cnt_list.append(
                     {'key': pk_id,
-                     'doc_count': result_itemCnt['hits']['total']})
+                     'doc_count': result_itemCnt['hits']['total']['value']})
 
     result['item_cnt'] = {'aggregations':
                           {'item_count': {'buckets': item_cnt_list}}}
@@ -322,7 +323,6 @@ def getById():
     indexer = RecordIndexer()
     result = indexer.client.search(
         index=current_app.config['WEKO_AUTHORS_ES_INDEX_NAME'],
-        doc_type=current_app.config['WEKO_AUTHORS_ES_DOC_TYPE'],
         body=body
     )
     return json.dumps(result)
@@ -433,7 +433,6 @@ def mapping():
     indexer = RecordIndexer()
     result = indexer.client.get(
         index=current_app.config['WEKO_AUTHORS_ES_INDEX_NAME'],
-        doc_type=current_app.config['WEKO_AUTHORS_ES_DOC_TYPE'],
         id=author_id
     )
     _source = result.get('_source')

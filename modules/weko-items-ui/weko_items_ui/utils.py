@@ -37,10 +37,10 @@ from io import StringIO
 
 import bagit
 from sqlalchemy.exc import SQLAlchemyError
-from elasticsearch.exceptions import NotFoundError
-from elasticsearch import exceptions as es_exceptions
-from flask import abort, current_app, flash, redirect, request, send_file, url_for
-from flask_babelex import gettext as _
+from invenio_search.engine import search
+from invenio_search.utils import build_alias_name
+from flask import abort, current_app, flash, redirect, request, send_file, url_for, Flask
+from flask_babel import gettext as _
 from flask_login import current_user
 from sqlalchemy import MetaData, Table
 from sqlalchemy.sql import text
@@ -51,7 +51,7 @@ from invenio_accounts.models import Role, userrole
 from invenio_db import db
 from invenio_i18n.ext import current_i18n
 from invenio_indexer.api import RecordIndexer
-from invenio_pidrelations.contrib.versioning import PIDVersioning
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
 from invenio_pidrelations.models import PIDRelation
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_pidstore.errors import PIDDoesNotExistError
@@ -166,10 +166,11 @@ def get_user_info_by_username(username):
         data = record.all()
 
         for item in data:
-            if item[0] == user_id and check_display_shared_user(user_id):
+            item_dict = dict(item)
+            if item_dict['id'] == user_id and check_display_shared_user(user_id):
                 result['username'] = username
                 result['user_id'] = user_id
-                result['email'] = item[1]
+                result['email'] = item_dict['email']
                 return result
         return None
     except Exception as e:
@@ -211,8 +212,9 @@ def validate_user(username, email):
         data = record.all()
 
         for item in data:
-            if item[1] == email:
-                user_id = item[0]
+            item_dict = dict(item)
+            if item_dict['email'] == email:
+                user_id = item_dict['id']
                 break
         if user is None:
             result['error'] = 'User is not exist UserProfile'
@@ -254,13 +256,14 @@ def get_user_info_by_email(email):
 
         data = record.all()
         for item in data:
-            if item[1] == email and check_display_shared_user(item[0]):
-                user = UserProfile.get_by_userid(item[0])
+            item_dict = dict(item)
+            if item_dict['email'] == email and check_display_shared_user(item[0]):
+                user = UserProfile.get_by_userid(item_dict['id'])
                 if user is None:
                     result['username'] = ""
                 else:
                     result['username'] = user.username
-                result['user_id'] = item[0]
+                result['user_id'] = item_dict['id']
                 result['email'] = email
                 return result
         return None
@@ -314,8 +317,9 @@ def get_user_information(user_ids):
             info['error'] = "The specified user ID is incorrect"
 
         for item in data:
-            if int(item[0]) == int(user_id):
-                info['email'] = item[1]
+            item_dict = dict(item)
+        if int(item_dict['id']) == int(user_id):
+                info['email'] = item_dict['email']
         result.append(info)
 
     return result
@@ -2473,7 +2477,7 @@ def get_list_file_by_record_id(recid):
     }
     indexer = RecordIndexer()
     result = indexer.client.search(
-        index=current_app.config['INDEXER_DEFAULT_INDEX'],
+        index=build_alias_name(current_app.config['INDEXER_DEFAULT_INDEX']),
         body=body
     )
     list_file_name = []
@@ -2664,7 +2668,7 @@ def export_items(post_data):
         resp = send_file(
             zip_path+".zip",
             as_attachment=True,
-            attachment_filename='export.zip'
+            download_name='export.zip'
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         current_app.logger.error("Invalid export parameters.")
@@ -2806,7 +2810,7 @@ def _get_max_export_items():
         return non_user_max
 
     try:
-        roles = db.session.query(Role).join(userrole).filter_by(
+        roles = db.session.query(Role).join(userrole, Role.id == userrole.c.role_id).filter_by(
             user_id=current_user_id).all()
     except Exception:
         return current_app.config['WEKO_ITEMS_UI_DEFAULT_MAX_EXPORT_NUM']
@@ -2960,7 +2964,7 @@ def get_new_items_by_date(start_date: str, end_date: str, ranking=False) -> dict
                                                           ranking=ranking)
         search_result = search_instance.execute()
         result = search_result.to_dict()
-    except NotFoundError as e:
+    except search.NotFoundError as e:
         current_app.logger.debug("Indexes do not exist yet: ", str(e))
 
     return result
@@ -3830,13 +3834,13 @@ class WekoQueryRankingHelper(QueryRankingHelper):
                 'new_items': False
             }
             query_config = current_app.config["WEKO_ITEMS_UI_RANKING_QUERY"][kwargs.get("ranking_type")]
-            query_class = query_config["query_class"]
-            cfg  =json.loads(json.dumps(query_config["query_config"]))
-            cfg.update(query_name=kwargs.get("ranking_type"))
+            query_class = query_config["cls"]
+            cfg  =json.loads(json.dumps(query_config["params"]))
+            cfg.update(name=kwargs.get("ranking_type"))
             all_query = query_class(**cfg)
             all_res = all_query.run(**params)
             cls.Calculation(all_res, result)
-        except es_exceptions.NotFoundError as e:
+        except search.NotFoundError as e:
             current_app.logger.debug(e)
         except Exception as e:
             current_app.logger.debug(e)
@@ -3898,7 +3902,7 @@ def get_ranking(settings):
             event_type='file-download',
             group_field='item_id',
             count_field='count',
-            must_not=json.dumps([{"wildcard": {"item_id": "*.*"}}])
+            must_not=json.dumps([{"wildcard": {"item_id": "*.*"}}]),
         )
 
         current_app.logger.debug("finished getting most_downloaded_items data from ES")
@@ -5048,7 +5052,8 @@ def check_item_is_being_edit(
     if not isinstance(activity, WorkActivity):
         activity = WorkActivity()
     if not isinstance(post_workflow, Activity):
-        latest_pid = PIDVersioning(child=recid).last_child
+        parent_pid = PIDNodeVersioning(pid=recid).parents.one_or_none()
+        latest_pid = PIDNodeVersioning(pid=parent_pid).last_child
         item_uuid = latest_pid.object_uuid
         post_workflow = activity.get_workflow_activity_by_item_id(item_uuid)
     if (
@@ -5072,16 +5077,14 @@ def check_item_is_being_edit(
             and draft_workflow.action_status in [ASP.ACTION_BEGIN, ASP.ACTION_DOING]
         ):
             current_app.logger.debug("draft_workflow: {0} status: {1}".format(
-                draft_pid.object_uuid, draft_workflow.action_status)
-            )
-            return str(draft_workflow.activity_id)
-
-        pv = PIDVersioning(child=recid)
-        latest_pid = PIDVersioning(parent=pv.parent,child=recid).get_children(
-            pid_status=PIDStatus.REGISTERED
-        ).filter(PIDRelation.relation_type == 2).order_by(
-            PIDRelation.index.desc()
-        ).first()
+                draft_pid.object_uuid, draft_workflow.action_status))
+            #return True
+            return draft_workflow.activity_id
+        
+        parent_pid = PIDNodeVersioning(pid=recid).parents.one_or_none()
+        pv = PIDNodeVersioning(pid=parent_pid)
+        latest_pid = pv.children.order_by(
+            PIDRelation.index.desc()).first()
         latest_workflow = activity.get_workflow_activity_by_item_id(
             latest_pid.object_uuid
         )
@@ -5251,7 +5254,8 @@ def get_file_download_data(item_id, record, filenames, query_date=None, size=Non
             from invenio_stats.proxies import current_stats
             # file download query
             query_download_total_cfg = current_stats.queries['item-file-download-aggs']
-            query_download_total = query_download_total_cfg.query_class(**query_download_total_cfg.query_config)
+            query_download_total = query_download_total_cfg.\
+                cls(name=query_download_total_cfg.name, **query_download_total_cfg.params)
             res_download_total = query_download_total.run(**params)
         except Exception as e:
             current_app.logger.error(traceback.print_exc())

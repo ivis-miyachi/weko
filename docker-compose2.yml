@@ -37,6 +37,8 @@ services:
     build:
       context: .
       #target: stage_1
+      args:
+        - INVENIO_APP_THEME=['bootstrap3']
     sysctls:
       net.core.somaxconn: 1024
     command: bash /code/scripts/entrypoint_web.sh
@@ -48,6 +50,7 @@ services:
       - INVENIO_WEB_VENV=invenio
       - INVENIO_WEB_HOST_NAME=weko3.example.org
       - INVENIO_WEB_PROTOCOL=https
+      - INVENIO_APP_THEME=['bootstrap3']
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
       # - INVENIO_POSTGRESQL_HOST=postgresql
@@ -56,7 +59,11 @@ services:
       - INVENIO_POSTGRESQL_DBUSER=invenio
       - INVENIO_POSTGRESQL_DBPASS=dbpass123
       - INVENIO_REDIS_HOST=redis
-      - INVENIO_ELASTICSEARCH_HOST=elasticsearch
+      - INVENIO_ELASTICSEARCH_HOST=opensearch
+      - INVENIO_OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=WekoOpensearch123!
+      - INVENIO_OPENSEARCH_USER=invenio
+      - INVENIO_OPENSEARCH_PASS=openpass123!
       - INVENIO_RABBITMQ_HOST=rabbitmq
       - INVENIO_RABBITMQ_USER=guest
       - INVENIO_RABBITMQ_PASS=guest
@@ -69,9 +76,7 @@ services:
       - INVENIO_ROLE_CONTRIBUTOR=Contributor
       - INVENIO_ROLE_COMMUNITY=Community Administrator
       # production or development
-      # - FLASK_ENV=development
-      - FLASK_ENV=production
-      # - FLASK_DEBUG=True
+      - FLASK_DEBUG=0
       - SEARCH_INDEX_PREFIX=tenant1
       #- INVENIO_DB_POOL_CLASS=QueuePool
       - INVENIO_DB_POOL_CLASS=NullPool
@@ -91,6 +96,7 @@ services:
       - TIKA_JAR_FILE_PATH=/code/tika/tika-app-2.6.0.jar
     volumes:
       - weko3_data:/var/tmp
+      - assets_data:/home/invenio/.virtualenvs/invenio/var/instance/assets
       - static_data:/home/invenio/.virtualenvs/invenio/var/instance/static
       - data_data:/home/invenio/.virtualenvs/invenio/var/instance/data
       - conf_data:/home/invenio/.virtualenvs/invenio/var/instance/conf
@@ -149,7 +155,7 @@ services:
       - postgresql
       - pgpool
       - redis
-      - elasticsearch
+      - opensearch
       - rabbitmq
       - worker
       - inbox
@@ -174,6 +180,8 @@ services:
     build:
       context: .
       #target: stage_1
+      args:
+        - INVENIO_APP_THEME=['bootstrap3']
     # image: weko-web
     # depends_on:
     #   - web
@@ -188,6 +196,7 @@ services:
       - INVENIO_WEB_VENV=invenio
       - INVENIO_WEB_HOST_NAME=weko3.example.org
       - INVENIO_WEB_PROTOCOL=https
+      - INVENIO_APP_THEME=['bootstrap3']
       - INVENIO_USER_EMAIL=wekosoftware@nii.ac.jp
       - INVENIO_USER_PASS=uspass123
       #- INVENIO_POSTGRESQL_HOST=postgresql
@@ -196,7 +205,11 @@ services:
       - INVENIO_POSTGRESQL_DBUSER=invenio
       - INVENIO_POSTGRESQL_DBPASS=dbpass123
       - INVENIO_REDIS_HOST=redis
-      - INVENIO_ELASTICSEARCH_HOST=elasticsearch
+      - INVENIO_ELASTICSEARCH_HOST=opensearch
+      - INVENIO_OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=WekoOpensearch123!
+      - INVENIO_OPENSEARCH_USER=invenio
+      - INVENIO_OPENSEARCH_PASS=openpass123!
       - INVENIO_RABBITMQ_HOST=rabbitmq
       - INVENIO_RABBITMQ_USER=guest
       - INVENIO_RABBITMQ_PASS=guest
@@ -209,9 +222,7 @@ services:
       - INVENIO_ROLE_CONTRIBUTOR=Contributor
       - INVENIO_ROLE_COMMUNITY=Community Administrator
       # production or development
-      # - FLASK_ENV=development
-      - FLASK_ENV=production
-      #- FLASK_DEBUG=True
+      - FLASK_DEBUG=1
       - SEARCH_INDEX_PREFIX=tenant1
       #- INVENIO_DB_POOL_CLASS=QueuePool
       - INVENIO_DB_POOL_CLASS=NullPool
@@ -221,6 +232,7 @@ services:
       - TMPDIR=/var/tmp
     volumes:
       - weko3_data:/var/tmp
+      - assets_data:/home/invenio/.virtualenvs/invenio/var/instance/assets
       - static_data:/home/invenio/.virtualenvs/invenio/var/instance/static
       - data_data:/home/invenio/.virtualenvs/invenio/var/instance/data
       - conf_data:/home/invenio/.virtualenvs/invenio/var/instance/conf
@@ -279,7 +291,7 @@ services:
       - postgresql
       - pgpool
       - redis
-      - elasticsearch
+      - opensearch
       - rabbitmq
     logging:
       driver: "json-file"
@@ -297,7 +309,7 @@ services:
 
   postgresql:
     restart: "always"
-    image: postgres:12
+    image: postgres:14
 #    command: postgres -c log_destination=stderr -c log_statement=all -c log_connections=on -c log_disconnections=on
     environment:
       - POSTGRES_USER=invenio
@@ -320,7 +332,7 @@ services:
       - PGPOOL_PARAMS_SR_CHECK_PASSWORD=dbpass123
       - PGPOOL_PARAMS_PORT=5432
       - PGPOOL_ENABLE_LDAP=no
-      - PGPOOL_POSTGRES_USERNAME=postgres
+      - PGPOOL_POSTGRES_USERNAME=invenio
       - PGPOOL_POSTGRES_PASSWORD=dbpass123
       - PGPOOL_ADMIN_USERNAME=admin
       - PGPOOL_ADMIN_PASSWORD=dbpass123
@@ -341,15 +353,24 @@ services:
         limits:
           memory: 100m
 
-  elasticsearch:
+  opensearch:
     restart: "always"
     build:
       context: .
-      dockerfile: ./elasticsearch/Dockerfile
+      dockerfile: ./opensearch/Dockerfile
+      args:
+        - OPENSEARCH_S3_ACCESS_KEY=${OPENSEARCH_S3_ACCESS_KEY}
+        - OPENSEARCH_S3_SECRET_KEY=${OPENSEARCH_S3_SECRET_KEY}
+        - OPENSEARCH_S3_ENDPOINT=${OPENSEARCH_S3_ENDPOINT}
+        - OPENSEARCH_S3_BUCKET=${OPENSEARCH_S3_BUCKET}
     volumes:
-      - es-data:/usr/share/elasticsearch/data
+      - os-data:/usr/share/opensearch/data
     environment:
-      - "ES_JAVA_OPTS=-Xms2048m -Xmx2048m"
+      - "discovery.type=single-node"
+      - "OPENSEARCH_JAVA_OPTS=-Xms2048m -Xmx2048m"
+      - "OPENSEARCH_INITIAL_ADMIN_PASSWORD=WekoOpensearch123!"
+      - "INVENIO_OPENSEARCH_USER=invenio"
+      - "INVENIO_OPENSEARCH_PASS=openpass123!"
     ports:
       - "29201:9200"
       - "29301:9300"
@@ -370,6 +391,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
+      - assets_data:/home/invenio/.virtualenvs/invenio/var/instance/assets
       - static_data:/home/invenio/.virtualenvs/invenio/var/instance/static
       - data_data:/home/invenio/.virtualenvs/invenio/var/instance/data
       # - letsencrypt_etc:/etc/letsencrypt
@@ -397,6 +419,16 @@ services:
       - "5501:5555"
     links:
       - rabbitmq
+
+  opensearch-dashboards:
+    restart: "always"
+    image: opensearchproject/opensearch-dashboards:latest
+    ports:
+      - "5601:5601"
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch:9200"]'
+    links:
+      - opensearch
 
   inbox:
     restart: "always"
@@ -447,11 +479,12 @@ services:
 volumes:
   weko3_data:
   weko3_tmp:
+  assets_data:
   static_data:
   data_data:
   conf_data:
   pgsql-data:
-  es-data:
+  os-data:
   mongo_data:
 #  letsencrypt_etc:
 #  letsencrypt_html:

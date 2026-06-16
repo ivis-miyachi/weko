@@ -25,7 +25,7 @@ from datetime import datetime as dt
 
 import pytest
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_menu import Menu
 from sqlalchemy_utils.functions import create_database, database_exists
 from invenio_access import InvenioAccess
@@ -76,7 +76,7 @@ def celery_config():
     return {}
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def instance_path():
     """Temporary instance path."""
     path = tempfile.mkdtemp()
@@ -121,7 +121,12 @@ def base_app(instance_path):
         WEKO_MAX_FILE_SIZE=50 * 1024 * 1024 * 1024,
         INDEXER_DEFAULT_INDEX="{}-weko-item-v1.0.0".format("test"),
         SEARCH_UI_SEARCH_INDEX="{}-weko".format("test"),
-        SEARCH_ELASTIC_HOSTS="elasticsearch",
+        SEARCH_ELASTIC_HOSTS=os.environ.get(
+                    'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST', 'opensearch'
+        ),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         SEARCH_INDEX_PREFIX="test-",
         INDEXER_DEFAULT_DOCTYPE='item-v1.0.0',
         INDEXER_FILE_DOC_TYPE='content',
@@ -158,21 +163,21 @@ def base_app(instance_path):
     return app_
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def app(base_app):
     """Flask application fixture."""
     with base_app.app_context():
         yield base_app
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def client(app):
     """Get test client."""
     with app.test_client() as client:
         yield client
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def db(app):
     """Database fixture."""
     if not database_exists(str(db_.engine.url)):

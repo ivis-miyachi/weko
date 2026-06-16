@@ -61,19 +61,17 @@ from operator import itemgetter
 
 import redis
 from redis import sentinel
-from elasticsearch import helpers
-from elasticsearch.exceptions import NotFoundError
-from elasticsearch_dsl.query import Bool, Exists, Q, QueryString
 from flask import Markup, current_app, session
-from flask_babelex import get_locale
-from flask_babelex import gettext as _
-from flask_babelex import to_user_timezone, to_utc
+from flask_babel import get_locale
+from flask_babel import gettext as _
+from flask_babel import to_user_timezone, to_utc
 from flask_login import current_user, login_user, LoginManager
 from invenio_cache import current_cache
 from invenio_communities.models import Community
 from invenio_i18n.ext import current_i18n
 from invenio_pidstore.models import PersistentIdentifier
 from invenio_search import RecordsSearch
+from invenio_search.engine import search, dsl
 from simplekv.memory.redisstore import RedisStore
 from invenio_accounts.testutils import login_user_via_session, login_user_via_view
 from invenio_records.models import RecordMetadata
@@ -448,6 +446,13 @@ def test_get_elasticsearch_records_data_by_indexes(i18n_app, indices, db_records
 
     assert get_elasticsearch_records_data_by_indexes(idx_tree_ids, start_date, end_date)
 
+    idx_tree_ids = ['nonexistent_index']
+    current_date = date.today()
+    start_date = (current_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    end_date = current_date.strftime("%Y-%m-%d")
+
+    with pytest.raises(search.NotFoundError):
+        get_elasticsearch_records_data_by_indexes(idx_tree_ids, start_date, end_date)
 
 #+++ def generate_path(index_ids):
 def test_generate_path(i18n_app, indices, esindex):

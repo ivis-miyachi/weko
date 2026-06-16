@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from invenio_theme import InvenioTheme
 import pytest
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_mail import Mail
 from flask_menu import Menu
 from sqlalchemy_utils.functions import create_database, database_exists
@@ -106,7 +106,9 @@ def base_app(instance_path):
             'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
         OAUTH2_CACHE_TYPE='simple',
         OAUTHLIB_INSECURE_TRANSPORT=True,
-        SEARCH_ELASTIC_HOSTS=os.environ.get("SEARCH_ELASTIC_HOSTS", "elasticsearch"),
+        SEARCH_ELASTIC_HOSTS=os.environ.get("SEARCH_ELASTIC_HOSTS", "opensearch"),
+        SEARCH_HOSTS=os.environ.get('SEARCH_HOST', 'opensearch'),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         CACHE_TYPE="redis",
         CACHE_REDIS_URL="redis://redis:6379/0",
         CACHE_REDIS_DB="0",
@@ -622,7 +624,6 @@ def es_records(app, esindex, records):
     for recid, depid, record, item, parent, doi, deposit in records:
         esindex.index(
             index=app.config["INDEXER_DEFAULT_INDEX"],
-            doc_type="item-v1.0.0",
             id=record.id,
             body=record,
             refresh="true"

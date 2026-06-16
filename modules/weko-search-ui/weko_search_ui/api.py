@@ -25,7 +25,7 @@ import markupsafe
 from operator import index
 
 from flask import current_app, json
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 from invenio_db import db
 from invenio_i18n.ext import current_i18n
@@ -125,7 +125,7 @@ class SearchSetting(object):
             script_str = {
                 "_script": {
                     "script": {
-                        "source": 'if(params.factor.get(doc["control_number"].value.toString())!=null){params.factor.get(doc["control_number"].value.toString())}else{Integer.MAX_VALUE}',
+                        "source": 'if(doc["control_number"].size() > 0 && doc["control_number"].value != null) {if (params.factor.containsKey(doc["control_number"].value.toString())) { params.factor.get(doc["control_number"].value.toString());} else { Integer.MAX_VALUE;}} else { Integer.MAX_VALUE;}',
                         "lang": "painless",
                         "params": {"factor": factor_obj},
                     },
@@ -139,7 +139,7 @@ class SearchSetting(object):
             script_str = {
                 "_script": {
                     "script": {
-                        "source": 'if(params.factor.get(doc["control_number"].value.toString())!=null){params.factor.get(doc["control_number"].value.toString())}else{Integer.MAX_VALUE}',
+                        "source": 'if(doc["control_number"].size() > 0 && doc["control_number"].value != null) {if (params.factor.containsKey(doc["control_number"].value.toString())) { params.factor.get(doc["control_number"].value.toString());} else { Integer.MAX_VALUE;}} else { Integer.MAX_VALUE;}',
                         "lang": "painless",
                         "params": {"factor": factor_obj},
                     },
@@ -200,7 +200,7 @@ def get_search_detail_keyword(str_):
         # detail search for index
         elif k_v.get("id") == "iid":
             k_v["check_val"] = check_val2
-        
+
         if k_v.get("contents") == "":
             contents_value = k_v.get("contents_value")
             k_v["contents"] = contents_value["en"]

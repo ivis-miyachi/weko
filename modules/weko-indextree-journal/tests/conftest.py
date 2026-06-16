@@ -22,7 +22,7 @@ import tempfile
 from datetime import date, datetime, timedelta
 import pytest
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from sqlalchemy_utils.functions import create_database, database_exists
 
 from invenio_accounts import InvenioAccounts
@@ -39,14 +39,14 @@ from weko_records import WekoRecords
 from weko_records.models import ItemType, ItemTypeMapping, ItemTypeName
 from weko_index_tree.models import Index
 from weko_index_tree import WekoIndexTree
-from weko_items_ui import WekoItemsUI
+#from weko_items_ui import WekoItemsUI
 from weko_workflow import WekoWorkflow
 
 from weko_indextree_journal import WekoIndextreeJournal, WekoIndextreeJournalREST
 from weko_indextree_journal.models import Journal
 from weko_indextree_journal.views import blueprint
 from weko_indextree_journal.rest import create_blueprint
-from weko_indextree_journal.bundles import *
+# from weko_indextree_journal.bundles import *
 
 sys.path.append(os.path.dirname(__file__))
 
@@ -104,7 +104,7 @@ def base_app(request,instance_path):
         WEKO_INDEX_TREE_UPATED=True,
         I18N_LANGUAGES=[("ja", "Japanese"), ("en", "English")],
         SERVER_NAME="TEST_SERVER",
-        SEARCH_ELASTIC_HOSTS="elasticsearch",
+        SEARCH_ELASTIC_HOSTS="opensearch",
         SEARCH_INDEX_PREFIX="test-",
         WEKO_PERMISSION_ROLE_USER=[
             "System Administrator",
@@ -147,7 +147,7 @@ def base_app(request,instance_path):
     WekoRecords(app_)
     WekoWorkflow(app_)
     WekoIndexTree(app_)
-    WekoItemsUI(app_)
+#   WekoItemsUI(app_)
     WekoIndextreeJournal(app_)
     WekoIndextreeJournalREST(app_)
 

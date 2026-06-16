@@ -1,5 +1,5 @@
 
-from marshmallow import Schema, fields 
+from marshmallow import Schema, fields, INCLUDE
 from marshmallow.validate import Range
 
 class ActivitySchema(Schema):
@@ -17,8 +17,9 @@ class ActivitySchema(Schema):
 class ActionSchema(Schema):
     action_version = fields.String(allow_none=True)
     commond = fields.String(allow_none=True)
+    temporary_save= fields.Integer(allow_none=True)
     class Meta:
-        strict = True
+        unknown = INCLUDE
 
 class CancelSchema(ActionSchema):
     pid_value = fields.String(allow_none=True)
@@ -95,7 +96,7 @@ class GetItemApplicationSchema(ResponseSchema):
 
 class SaveActivitySchema(Schema):
     activity_id = fields.String(required=True)
-    # title = fields.String(required=True)
+    title = fields.String()
     # title = fields.List(required=True)
     shared_user_ids = fields.List(fields.Dict(allow_none=True))
     approval1 = fields.String(allow_none=True)

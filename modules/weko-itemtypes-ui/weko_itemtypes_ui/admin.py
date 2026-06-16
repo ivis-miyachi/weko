@@ -31,7 +31,7 @@ from flask import (
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql.expression import null
 from flask_admin import BaseView, expose
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 from zipfile import ZipFile, ZIP_DEFLATED
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
@@ -83,7 +83,9 @@ class ItemTypeMetaDataView(BaseView):
             item_type_list=item_type_list,
             id=item_type_id,
             is_sys_admin=is_sys_admin,
-            lang_code=session.get('selected_language', 'en')  # Set default
+            lang_code=session.get('selected_language', 'en'),  # Set default
+            uiFixedProperties=current_app.config['WEKO_ITEMTYPES_UI_FIXED_PROPERTIES'],
+            ui_pubdate_titles=current_app.config['WEKO_ITEMTYPES_UI_PUBDATE_DEFAULT_TITLES']
         )
 
     @expose('/<int:item_type_id>/render', methods=['GET'])
@@ -416,9 +418,9 @@ class ItemTypeMetaDataView(BaseView):
             tmp = {'name': name, 'schema': k.schema, 'form': k.form,
                    'forms': k.forms, 'sort': k.sort, 'is_file': is_file}
             if name and name[:2] == 'S_':
-                lists['system'][k.id] = tmp
+                lists['system'][str(k.id)] = tmp
             else:
-                lists[k.id] = tmp
+                lists[str(k.id)] = tmp
 
         settings = AdminSettings.get('default_properties_settings')
         default_properties = current_app.config[
@@ -459,39 +461,23 @@ class ItemTypeMetaDataView(BaseView):
         item_type_mappings = Mapping.get_record(item_type_id)
         fp = io.BytesIO()
         with ZipFile(fp, 'w', compression=ZIP_DEFLATED) as new_zip:
-            # Output JSON data to a ZIP file
-            item_type_json = json.dumps(
-                ItemTypeSchema().dump(item_types).data,
-                ensure_ascii=False)
-            name_json = json.dumps(
-                ItemTypeNameSchema().dump(item_type_names).data,
-                ensure_ascii=False)
-            mapping_json = json.dumps(
-                ItemTypeMappingSchema().dump(item_type_mappings.model).data,
-                ensure_ascii=False)
-            properties_json = ""
+            # zipファイルにJSON文字列を追加
+            new_zip.writestr("ItemType.json", ItemTypeSchema().dumps(item_types).encode().decode('unicode-escape').encode())
+            new_zip.writestr("ItemTypeName.json", ItemTypeNameSchema().dumps(item_type_names).encode().decode('unicode-escape').encode())
+            new_zip.writestr("ItemTypeMapping.json", ItemTypeMappingSchema().dumps(item_type_mappings.model).encode().decode('unicode-escape').encode())
+            json_str = ""
             for item_type_property in item_type_properties :
-                property_json = json.dumps(
-                    ItemTypePropertySchema().dump(item_type_property).data,
-                    ensure_ascii=False
-                )
-                if len(properties_json) > 0:
-                    properties_json += ","
-                properties_json += property_json
-            properties_json = "[" + properties_json + "]"
-            new_zip.writestr(
-                "ItemType.json", item_type_json.encode('utf-8'))
-            new_zip.writestr(
-                "ItemTypeName.json", name_json.encode('utf-8'))
-            new_zip.writestr(
-                "ItemTypeMapping.json", mapping_json.encode('utf-8'))
-            new_zip.writestr(
-                "ItemTypeProperty.json", properties_json.encode('utf-8'))
+                prop_str = ItemTypePropertySchema().dumps(item_type_property)
+                if len(json_str) > 0:
+                    json_str += ","
+                json_str += prop_str
+            json_str = "[" + json_str + "]"
+            new_zip.writestr("ItemTypeProperty.json", json_str.encode().decode('unicode-escape').encode())
         fp.seek(0)
         return send_file(
             fp ,
             mimetype = 'application/zip' ,
-            attachment_filename ='ItemType_export.zip' ,
+            download_name ='ItemType_export.zip' ,
             as_attachment = True
         )
 

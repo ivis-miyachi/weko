@@ -31,7 +31,7 @@ from flask import (
     Blueprint, abort, current_app, flash, jsonify, redirect,
     render_template, request, session, url_for
 )
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import login_required
 from flask_security import current_user
 from flask_wtf import FlaskForm
@@ -42,7 +42,7 @@ from werkzeug.exceptions import BadRequest
 
 from invenio_db import db
 from invenio_i18n.ext import current_i18n
-from invenio_pidrelations.contrib.versioning import PIDVersioning
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
 from invenio_pidstore.models import PersistentIdentifier
 from invenio_pidstore.resolver import Resolver
 from invenio_pidstore.errors import PIDDoesNotExistError
@@ -1125,7 +1125,8 @@ def prepare_edit_item(id=None, community=None):
             + deposit.get('weko_shared_ids') if deposit.get('weko_shared_ids') is not None else []
         user_id = int(get_current_user())
         work_activity = WorkActivity()
-        latest_pid = PIDVersioning(child=recid).last_child
+        parent_pid = PIDNodeVersioning(pid=recid).parents.one_or_none()
+        latest_pid = PIDNodeVersioning(pid=parent_pid).last_child
 
         # ! Check User's Permissions
         if user_id not in authenticators and not get_user_roles(is_super_role=True)[0]:

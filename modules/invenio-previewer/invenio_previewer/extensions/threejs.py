@@ -21,4 +21,3 @@ def preview(file):
             'previewer_threejs',
         ] + current_previewer.js_bundles,
     )
-

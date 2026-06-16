@@ -31,9 +31,8 @@ import traceback
 
 from celery import shared_task
 from celery.result import AsyncResult
-from celery.task.control import inspect
-from flask import current_app, request
-from flask_babelex import gettext as _
+from flask import current_app
+from flask_babel import gettext as _
 
 from weko_admin.api import TempDirInfo
 from weko_admin.utils import get_redis_cache, reset_redis_cache
@@ -49,7 +48,6 @@ from .utils import (
     get_lifetime,
     import_items_to_system,
 )
-
 
 @shared_task
 def check_import_items_task(
@@ -163,7 +161,7 @@ def import_item(item, request_info):
 
 @shared_task
 def remove_temp_dir_task(path):
-    """Import Item ."""
+    """Remove temporary directory."""
     shutil.rmtree(path)
     TempDirInfo().delete(path)
 
@@ -189,7 +187,7 @@ def delete_task_id_cache_on_revoke(task_id, cache_key):
         state = AsyncResult(task_id).state
         if state == "REVOKED":
             redis_connection = RedisConnection()
-            datastore = redis_connection.connection(db=current_app.config['CACHE_REDIS_DB'], kv = True)
+            datastore = redis_connection.connection(db=current_app.config['CACHE_REDIS_DB'], kv=True)
             datastore.delete(cache_key)
 
 @shared_task
@@ -297,26 +295,36 @@ def write_files_task(self, export_path, pickle_file_name , user_id):
 
 def is_import_running():
     """Check import is running."""
-    if not check_celery_is_run():
+
+    celery_app = current_app.extensions.get('invenio-celery')
+    _timeout = current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)
+    inspect = celery_app.celery.control.inspect(timeout=_timeout)
+
+    if celery_app is None or not inspect.ping():
+        current_app.logger.error("Celery app is not initialized.")
         return "celery_not_run"
 
-    _timeout = current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)
-    active = inspect(timeout=_timeout).active()
-    for worker in active:
-        for task in active[worker]:
+    active = inspect.active()
+    for tasks in active.values():
+        for task in tasks:
             if task["name"] == "weko_search_ui.tasks.import_item":
                 return "is_import_running"
 
-    reserved = inspect(timeout=_timeout).reserved()
-    for worker in reserved:
-        for task in reserved[worker]:
+    reserved = inspect.reserved()
+    for tasks in reserved.values():
+        for task in tasks:
             if task["name"] == "weko_search_ui.tasks.import_item":
                 return "is_import_running"
+
+    return False
 
 
 def check_celery_is_run():
     """Check celery is running, or not."""
-    if not inspect(timeout=current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)).ping():
+    _timeout = current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)
+    inspect = current_app.extensions.get(
+        'invenio-celery').celery.control.inspect(timeout=_timeout)
+    if inspect is None or not inspect.ping():
         return False
     else:
         return True

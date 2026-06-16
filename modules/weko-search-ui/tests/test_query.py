@@ -1,6 +1,6 @@
 import json
 import copy
-from elasticsearch_dsl.query import Match, Range, Terms, Bool
+from opensearch_dsl.query import Match, Range, Terms, Bool
 from mock import patch, MagicMock
 from werkzeug.datastructures import MultiDict
 from invenio_accounts.testutils import login_user_via_session

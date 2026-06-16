@@ -567,7 +567,7 @@ msgstr "非ログインユーザー"
 
 #: weko_admin/config.py:201
 #: weko_admin/templates/weko_admin/admin/feedback_mail.html:49
-msgid "Mail address"
+msgid "Search result Mail address"
 msgstr "メールアドレス"
 
 #: weko_admin/config.py:202
@@ -1070,8 +1070,8 @@ msgid "There is no data."
 msgstr "検索結果はありません."
 
 #: weko_admin/templates/weko_admin/admin/feedback_mail.html:62
-msgid "Feedback Mail Import"
-msgstr ""
+msgid "Search result Feedback Mail Import"
+msgstr "Feedback Mail Import"
 
 #: weko_admin/templates/weko_admin/admin/file_preview_settings.html:41
 msgid "PDF Save Path"

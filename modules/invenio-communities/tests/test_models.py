@@ -1,27 +1,10 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2016 CERN.
+# Copyright (C) 2016-2019 CERN.
 #
-# Invenio is free software; you can redistribute it
-# and/or modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 2 of the
-# License, or (at your option) any later version.
-#
-# Invenio is distributed in the hope that it will be
-# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Invenio; if not, write to the
-# Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
-# MA 02111-1307, USA.
-#
-# In applying this license, CERN does not
-# waive the privileges and immunities granted to it by virtue of its status
-# as an Intergovernmental Organization or submit itself to any jurisdiction.
-
+# Invenio is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
 """Model functions tests."""
 
 from __future__ import absolute_import, print_function
@@ -108,9 +91,9 @@ class TestInclusionRequest:
 #     def delete(self):
 #     def create(cls, community, record, user=None, expires_at=None,
 # .tox/c1/bin/pytest --cov=invenio_communities tests/test_models.py::TestInclusionRequest::test_create -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
-    def test_create(self,db,db_records,communities,users,mocker):
-        mocker.patch("invenio_records.api.before_record_update.send")
-        mocker.patch("invenio_records.api.after_record_update.send")
+    def test_create(self,db,db_records,communities,users):
+        patch("invenio_records.api.before_record_update.send")
+        patch("invenio_records.api.after_record_update.send")
         record = db_records[2]
         comm = communities[0]
         increq = InclusionRequest.create(
@@ -249,9 +232,9 @@ class TestCommunity:
 
 #     def add_record(self, record):
 # .tox/c1/bin/pytest --cov=invenio_communities tests/test_models.py::TestCommunity::test_add_record -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
-    def test_add_record(self, app, db, db_records,communities,mocker):
-        mocker.patch("invenio_records.api.before_record_update.send")
-        mocker.patch("invenio_records.api.after_record_update.send")
+    def test_add_record(self, app, db, db_records,communities):
+        patch("invenio_records.api.before_record_update.send")
+        patch("invenio_records.api.after_record_update.send")
 
         record = db_records[2]
         comm = communities[0]
@@ -276,9 +259,9 @@ class TestCommunity:
 
 #     def remove_record(self, record):
 # .tox/c1/bin/pytest --cov=invenio_communities tests/test_models.py::TestCommunity::test_remove_record -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-communities/.tox/c1/tmp
-    def test_remove_record(self, app, db, db_records, communities, mocker):
-        mocker.patch("invenio_records.api.before_record_update.send")
-        mocker.patch("invenio_records.api.after_record_update.send")
+    def test_remove_record(self, app, db, db_records, communities):
+        patch("invenio_records.api.before_record_update.send")
+        patch("invenio_records.api.after_record_update.send")
         record = db_records[2]
         comm = communities[0]
         rec = Record.get_record(record.id)

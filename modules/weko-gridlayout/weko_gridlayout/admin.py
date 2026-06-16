@@ -34,10 +34,10 @@ from flask_admin.babel import gettext, lazy_gettext, ngettext
 from flask_admin.contrib.sqla import ModelView, tools
 from flask_admin.helpers import get_redirect_target
 from flask_admin.model import helpers, typefmt
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 from invenio_communities.models import Community
-from jinja2 import contextfunction
+from jinja2 import pass_context
 from sqlalchemy import func
 from wtforms.fields import StringField
 
@@ -229,6 +229,8 @@ class WidgetSettingView(ModelView):
             get_pk_value=self.get_pk_value,
             get_value=self.get_list_value,
             return_url=self._get_list_url(view_args),
+
+            extra_args=view_args.extra_args
         )
 
     @expose('/new/', methods=('GET', 'POST'))
@@ -292,7 +294,7 @@ class WidgetSettingView(ModelView):
                            locked=locked
                            )
 
-    @contextfunction
+    @pass_context
     def get_detail_value(self, context, model, name):
         """Returns the value to be displayed in the detail view.
 

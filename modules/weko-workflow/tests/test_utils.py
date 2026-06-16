@@ -11,7 +11,7 @@ import flask
 import pytz
 from werkzeug.datastructures import MultiDict
 from flask import current_app,session
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.exc import NoResultFound
 from redis.exceptions import ResponseError
@@ -5823,4 +5823,3 @@ def test_reset_flow_action_roles_restricted_access(app,db,db_register_full_actio
     for action_role in FlowActionRole.query.all():
        assert action_role.specify_property == None
        assert action_role.action_item_registrant == False
-

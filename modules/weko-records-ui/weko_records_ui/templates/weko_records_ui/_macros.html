@@ -22,7 +22,7 @@
   <input id="non-role-msg" type="hidden"
          value="{{restricted_errorMsg}}"/>
   {% set is_guest = False %}
-  {% if not session['user_id'] %}
+  {% if not session['_user_id'] %}
     {% set is_guest = True %}
     {% set href_url = url_for_security('login', next=request.path) %}
     {% if is_file_name_url %}

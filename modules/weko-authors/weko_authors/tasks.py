@@ -30,7 +30,7 @@ from time import sleep
 
 from celery import shared_task, states, group
 from celery.result import GroupResult
-from celery.task.control import inspect
+from celery.app.control import Inspect
 from flask import current_app
 from flask_babelex import lazy_gettext as _
 from invenio_cache import current_cache
@@ -488,24 +488,27 @@ def check_is_import_available(group_task_id=None):
     """Is import available."""
     result = {
         'is_available': True
-    }
+        }
 
-    if not inspect(timeout=current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)).ping():
+    inspect = current_app.extensions.get('invenio-celery')
+    if inspect is None or not inspect.celery.control.inspect(
+        timeout=current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)).ping():
         result['is_available'] = False
         result['celery_not_run'] = True
-    else:
-        cache_data = get_cache_data(WEKO_AUTHORS_IMPORT_CACHE_KEY)
-        if cache_data:
-            task = GroupResult.restore(cache_data.get('group_task_id'))
-            if task:
-                if task.successful() or task.failed():
-                    delete_cache_data(WEKO_AUTHORS_IMPORT_CACHE_KEY)
-                else:
-                    result['is_available'] = False
-                    if group_task_id and group_task_id == task.id:
-                        result['continue_data'] = cache_data
-            else:
+        return result
+
+    cache_data = get_cache_data(WEKO_AUTHORS_IMPORT_CACHE_KEY)
+    if cache_data:
+        task = GroupResult.restore(cache_data.get('group_task_id'))
+        if task:
+            if task.successful() or task.failed():
                 delete_cache_data(WEKO_AUTHORS_IMPORT_CACHE_KEY)
+            else:
+                result['is_available'] = False
+                if group_task_id and group_task_id == task.id:
+                    result['continue_data'] = cache_data
+        else:
+            delete_cache_data(WEKO_AUTHORS_IMPORT_CACHE_KEY)
 
     return result
 

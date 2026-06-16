@@ -26,7 +26,6 @@ import traceback
 from typing import List, Optional
 
 from flask import abort, current_app, request
-from flask_babelex import get_locale, to_user_timezone, to_utc
 from flask_security import current_user
 from invenio_access import Permission, action_factory
 from invenio_accounts.models import User
@@ -36,7 +35,6 @@ from invenio_oauth2server import require_api_auth, require_oauth_scopes
 from weko_groups.api import Group, Membership, MembershipState
 from weko_index_tree.utils import check_index_permissions, get_user_roles
 from weko_records.api import ItemTypes
-from weko_workflow.api import WorkActivity
 
 from .ipaddr import check_site_license_permission
 from .models import FilePermission
@@ -202,7 +200,7 @@ def check_file_download_permission(record, fjson, is_display_file_info=False, it
                         if access_date:
                             c_is_can = not is_future(access_date)
                         else:
-                            # get date list and check dateValue is future 
+                            # get date list and check dateValue is future
                             date_list = fjson.get('date')
                             if date_list and isinstance(date_list, list) and date_list[0]:
                                 adt = date_list[0].get('dateValue')
@@ -402,6 +400,7 @@ def get_permission(record:dict, fjson:dict) -> Optional[FilePermission]:
             return permission
         else:
             activity_id = permission.usage_application_activity_id
+            from weko_workflow.api import WorkActivity
             activity = WorkActivity()
             steps = activity.get_activity_steps(activity_id)
             if steps:
@@ -448,7 +447,7 @@ def check_user_group_permission(group_id):
         except ValueError:
             return is_ok
         if user_id:
-            query = Group.query.filter_by(id=group_id).join(Membership) \
+            query = Group.query.filter_by(id=group_id).join(Membership, Group.id == Membership.id_group) \
                 .filter_by(user_id=user_id, state=MembershipState.ACTIVE)
             if query.count() > 0:
                 is_ok = True

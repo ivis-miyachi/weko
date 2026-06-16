@@ -43,7 +43,7 @@ class TestAuthors:
         assert result.json == {}
 
 # .tox/c1/bin/pytest --cov=weko_authors tests/test_models.py::TestAuthors::test_get_sequence -vv -s --cov-branch --cov-report=term --cov-report=html --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_get_sequence(self, db, mocker):
+    def test_get_sequence(self, db):
         class MockSession:
             def __init__(self):
                 self.id = {"authors_id_seq":1}

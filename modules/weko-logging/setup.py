@@ -71,10 +71,12 @@ setup(
         "invenio_base.apps": [
             "weko_logging_fs = weko_logging.fs:WekoLoggingFS",
             "weko_logging_user_activity = weko_logging.audit:WekoLoggingUserActivity",
+            "weko_logging_console = weko_logging.console:WekoLoggingConsole",
         ],
         "invenio_base.api_apps": [
             "weko_logging_fs = weko_logging.fs:WekoLoggingFS",
             "weko_logging_user_activity = weko_logging.audit:WekoLoggingUserActivity",
+            "weko_logging_console = weko_logging.console:WekoLoggingConsole",
         ],
         "invenio_i18n.translations": [
             "messages = weko_logging",

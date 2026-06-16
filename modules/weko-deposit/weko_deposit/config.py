@@ -61,7 +61,8 @@ WEKO_DEPOSIT_FILESIZE_LIMIT = 2 * 1024 * 1024
 FILES_REST_STORAGE_FACTORY = 'weko_deposit.storage.pyfs_storage_factory'
 """Import path of factory used to create a storage instance."""
 
-FILES_REST_UPLOAD_OWNER_FACTORIES = 'weko_deposit.serializer.file_uploaded_owner'
+FILES_REST_UPLOAD_OWNER_FACTORIES \
+    = 'weko_deposit.serializer.file_uploaded_owner'
 """file update version"""
 
 WEKO_DEPOSIT_ITEMS_CACHE_PREFIX = 'cache_itemsIndex_{pid_value}'
@@ -104,39 +105,36 @@ DEPOSIT_REST_ENDPOINTS = dict(
         pid_fetcher='weko_deposit_fetcher',
         record_class='weko_deposit.api:WekoDeposit',
         record_serializers={
-            'application/json': ('weko_records.serializers'
-                                 ':deposit_json_v1_response'),
+            'application/json': ('weko_records.serializers:'
+                                'deposit_json_v1_response'),
         },
         files_serializers={
-            'application/json': ('invenio_deposit.serializers'
-                                 ':json_v1_files_response'),
+            'application/json': ('invenio_deposit.serializers:'
+                                'json_v1_files_response'),
         },
         search_class='invenio_deposit.search:DepositSearch',
         search_serializers={
-            'application/json': ('invenio_records_rest.serializers'
-                                 ':json_v1_search'),
+            'application/json': ('invenio_records_rest.serializers:'
+                                'json_v1_search'),
         },
         list_route='/deposits/items',
         item_route='/deposits/items/<{0}:pid_value>'.format(_PID),
         file_list_route='/deposits/items/<{0}:pid_value>/files'.format(_PID),
-        file_item_route='/deposits/items/<{0}:pid_value>/files/<path:key>'.format(
-            _PID),
+        file_item_route=\
+            '/deposits/items/<{0}:pid_value>/files/<path:key>'.format(_PID),
         default_media_type='application/json',
         links_factory_imp='weko_deposit.links:links_factory',
         max_result_window=10000,
-        # create_permission_factory_imp='',
-        # read_permission_factory_imp='',
-        # update_permission_factory_imp='',
         delete_permission_factory_imp=deny_all,
     )
 )
 
 # for redirect to next page(index select)
 WEKO_DEPOSIT_REST_ENDPOINTS = copy.deepcopy(DEPOSIT_REST_ENDPOINTS)
-WEKO_DEPOSIT_REST_ENDPOINTS['depid']['rdc_route'] = '/deposits/redirect/<{0}:pid_value>'.format(
-    _PID)
-WEKO_DEPOSIT_REST_ENDPOINTS['depid']['pub_route'] = '/deposits/publish/<{0}:pid_value>'.format(
-    _PID)
+WEKO_DEPOSIT_REST_ENDPOINTS['depid']['rdc_route']\
+    = '/deposits/redirect/<{0}:pid_value>'.format(_PID)
+WEKO_DEPOSIT_REST_ENDPOINTS['depid']['pub_route']\
+    = '/deposits/publish/<{0}:pid_value>'.format(_PID)
 
 DEPOSIT_RECORDS_UI_ENDPOINTS = {
     'depid': {
@@ -145,7 +143,8 @@ DEPOSIT_RECORDS_UI_ENDPOINTS = {
         'template': 'weko_items_ui/edit.html',
         'record_class': 'weko_deposit.api:WekoDeposit',
         'view_imp': 'weko_items_ui.views.default_view_method',
-        'permission_factory_imp': 'weko_items_ui.permissions:edit_permission_factory',
+        'permission_factory_imp': \
+            'weko_items_ui.permissions:edit_permission_factory',
     },
     'iframe_depid': {
         'pid_type': 'depid',
@@ -153,7 +152,8 @@ DEPOSIT_RECORDS_UI_ENDPOINTS = {
         'template': 'weko_items_ui/iframe/item_edit.html',
         'record_class': 'weko_deposit.api:WekoDeposit',
         'view_imp': 'weko_items_ui.views.default_view_method',
-        'permission_factory_imp': 'weko_items_ui.permissions:edit_permission_factory',
+        'permission_factory_imp': \
+            'weko_items_ui.permissions:edit_permission_factory',
     }
 }
 
@@ -234,4 +234,25 @@ WEKO_DEPOSIT_BIBLIOGRAPHIC_INFO_SYS_KEY = [
 ]
 """Bibliographic information sys key."""
 
+WEKO_DEPOSIT_ES_PARSING_ERROR_PROCESS_ENABLE = True
+"""Allow reindex data when catching parsing error from search engine."""
 
+WEKO_DEPOSIT_ES_PARSING_ERROR_KEYWORD = 'ElasticsearchParseException'
+"""Parsing error's Keyword in search engine exception info."""
+
+from invenio_pidrelations.config import RelationType
+
+PIDRELATIONS_RELATION_TYPES = [
+    RelationType(0, 'ordered', 'Ordered',
+                 'invenio_pidrelations.api:PIDNodeOrdered1',
+                 'invenio_pidrelations.serializers.schemas.RelationSchema'),
+    RelationType(1, 'unordered', 'Unordered',
+                 'invenio_pidrelations.api:PIDNode1',
+                 'invenio_pidrelations.serializers.schemas.RelationSchema'),
+    RelationType(2, 'version', 'Version',
+                 'invenio_pidrelations.contrib.versioning:PIDNodeVersioning',
+                 'invenio_pidrelations.serializers.schemas.RelationSchema'),
+    RelationType(3, 'record_draft', 'Record Draft',
+                 'weko_deposit.draft:WekoPIDNodeDraft',
+                 'invenio_pidrelations.serializers.schemas.RelationSchema'),
+]

@@ -22,12 +22,12 @@ def test_update_records_sets(app,records, mocker):
     mocker.patch("invenio_oaiserver.tasks._records_commit")
     res = RecordMetadata.query.all()
     ids = [rec.id for rec in res]
-    
+
     class MockIndexer:
         def bulk_index(self,query):
             for q in query:
                 a=q
-        def process_bulk_queue(self,es_bulk_kwargs):
+        def process_bulk_queue(self,search_bulk_kwargs):
             pass
     mocker.patch("invenio_oaiserver.tasks.RecordIndexer",side_effect=MockIndexer)
     update_records_sets(ids)
@@ -46,7 +46,7 @@ def test_update_affected_records(app,db,without_oaiset_signals,mocker):
     class MockIndexer:
         def bulk_index(self,query):
             pass
-        def process_bulk_queue(self,es_bulk_kwargs):
+        def process_bulk_queue(self,search_bulk_kwargs):
             pass
     mocker.patch("invenio_oaiserver.tasks.RecordIndexer",side_effect=MockIndexer)
     oai = OAISet(id=1,
@@ -54,7 +54,7 @@ def test_update_affected_records(app,db,without_oaiset_signals,mocker):
         name='test_name',
         description='some test description',
         search_pattern='test search')
-    
+
     db.session.add(oai)
     db.session.commit()
     update_affected_records.delay(oai.spec,oai.search_pattern)

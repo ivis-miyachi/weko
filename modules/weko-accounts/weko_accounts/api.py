@@ -14,8 +14,8 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 import redis
-from flask import current_app, request, session
-from flask_babelex import gettext as _
+from flask import current_app, session
+from flask_babel import gettext as _
 from flask_login import current_user, user_logged_in, user_logged_out
 from flask_security.utils import hash_password, verify_password
 
@@ -264,7 +264,7 @@ class ShibUser(object):
         :return:
 
         """
-        session['user_id'] = self.user.id
+        session['_user_id'] = self.user.id
         session['user_src'] = 'Shib'
         user_logged_in.send(current_app._get_current_object(), user=self.user)
 

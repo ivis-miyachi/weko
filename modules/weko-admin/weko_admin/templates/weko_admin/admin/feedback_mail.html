@@ -24,14 +24,16 @@
 
 {%- block css %}
   {{ super() }}
-  {% assets "weko_admin_feedback_mail_css" %}<link href="{{ ASSET_URL }}" rel="stylesheet">{% endassets %}
+  {{ webpack['admin_css_weko_admin_feedback_mail_css.css']}}
 {%- endblock css %}
 
 {%- block javascript %}
   {{ super() }}
-  {% assets "weko_admin_feedback_mail" %}<script type="text/babel" src="{{ ASSET_URL }}"></script>{% endassets %}
-  {% assets "weko_admin_statistics_reactjs_lib" %}<script type="text/javascript" src="{{ ASSET_URL }}"></script>{% endassets %}
-  {% assets "weko_admin_react_bootstrap_js" %}<script type="text/javascript" src="{{ ASSET_URL }}"></script>{% endassets %}
+  <script src="/assets/js/weko_admin/react.production.min.js"></script>
+  <script src="/assets/js/weko_admin/react-dom.production.min.js"></script>
+  <script src="/assets/js/weko_admin/browser.min.js"></script>
+  <script src="/assets/js/weko_admin/react-bootstrap.min.js"></script>
+  {{ webpack['admin_js_feedback_mail_js.js']}}
 {%- endblock javascript %}
 
 {%- block body %}
@@ -46,7 +48,7 @@
 <input id="manual-send-name" type="hidden" value="{{_('Manual Send')}}" />
 <input id="message-success" type="hidden" value="{{_('Update successfully.')}}" />
 <input id="duplicate-error-message" type="hidden" value="{{_('Duplicate Email Addresses.')}}" />
-<input id="mail-address-label" type="hidden" value="{{_('Mail address')}}" />
+<input id="mail-address-label" type="hidden" value="{{_('Search result Mail address')}}" />
 <input id="send-logs-label" type="hidden" value="{{_('Send logs')}}" />
 <input id="start-time-label" type="hidden" value="{{_('Start time')}}" />
 <input id="end-time-label" type="hidden" value="{{_('End time')}}" />
@@ -59,6 +61,6 @@
 <input id="close-button-name" type="hidden" value="{{_('Close')}}" />
 <input id="no-data-label" type="hidden" value="{{_('There is no data.')}}" />
 <input id="search-button-name" type="hidden" value="{{_('Search')}}" />
-<input id="import-button-name" type="hidden" value="{{_('Feedback Mail Import')}}" />
+<input id="import-button-name" type="hidden" value="{{_('Search result Feedback Mail Import')}}" />
 
 {%- endblock body %}

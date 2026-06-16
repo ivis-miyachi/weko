@@ -18,7 +18,7 @@
 # MA 02111-1307, USA.
 #}
 {%- block css %}
-  {% assets "weko_facet_search_css" %}<link href="{{ ASSET_URL }}" rel="stylesheet">{% endassets %}
+  <link rel="stylesheet" href="/assets/css/weko_search_ui/facet_chunk.css">
 {%- endblock css %}
 
 
@@ -31,5 +31,7 @@
 <input class="body-facet-search-label" id="facetSliderCorrelationValidation" type="hidden" value="{{_('facet slider correlation validation')}}" />
 <div id="app-facet-search"></div>
 {%- block javascript %}
-{% assets "weko_facet_search_js" %}<script type="text/javascript" src="{{ ASSET_URL }}"></script>{% endassets %}  
+  <script src="{{ url_for('static', filename='js/weko_search_ui/facet.runtime-main.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/weko_search_ui/facet.chunk.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/weko_search_ui/facet.main.chunk.js') }}" defer></script>
 {%- endblock javascript %}

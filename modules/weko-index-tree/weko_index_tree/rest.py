@@ -32,8 +32,8 @@ from flask import (
     Blueprint, abort, current_app, jsonify, make_response,
     request, Response
 )
-from flask_babelex import gettext as _
-from flask_babelex import get_locale as get_current_locale
+from flask_babel import gettext as _
+from flask_babel import get_locale as get_current_locale
 from flask_login import current_user
 from marshmallow import ValidationError
 from sqlalchemy import or_

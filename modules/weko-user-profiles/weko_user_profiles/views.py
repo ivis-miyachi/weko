@@ -24,7 +24,7 @@ import traceback
 import requests
 
 from flask import Blueprint, current_app, jsonify, render_template, request
-from flask_babelex import lazy_gettext as _
+from flask_babel import lazy_gettext as _
 from flask_breadcrumbs import register_breadcrumb
 from flask_login import current_user, login_required
 from flask_menu import register_menu
@@ -113,14 +113,6 @@ def get_profile_info():
 
 @blueprint.route('/', methods=['GET', 'POST'])
 @login_required
-@register_menu(
-    blueprint, 'settings.profile',
-    # NOTE: Menu item text (icon replaced by a user icon).
-    _('%(icon)s Profile', icon='<i class="fa fa-user fa-fw"></i>'),
-    order=0)
-@register_breadcrumb(
-    blueprint, 'breadcrumbs.settings.profile', _('Profile')
-)
 def profile():
     """View for editing a profile."""
     # Create forms

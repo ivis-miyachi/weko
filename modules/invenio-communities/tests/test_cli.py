@@ -1,26 +1,10 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2016 CERN.
+# Copyright (C) 2016-2019 CERN.
 #
-# Invenio is free software; you can redistribute it
-# and/or modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 2 of the
-# License, or (at your option) any later version.
-#
-# Invenio is distributed in the hope that it will be
-# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Invenio; if not, write to the
-# Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
-# MA 02111-1307, USA.
-#
-# In applying this license, CERN does not
-# waive the privileges and immunities granted to it by virtue of its status
-# as an Intergovernmental Organization or submit itself to any jurisdiction.
+# Invenio is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
 
 
 """Module tests."""
@@ -106,17 +90,17 @@ def test_request(script_info,db_records,communities,mocker):
 
     # accept is true
     runner = CliRunner()
-    mock_index = mocker.patch("invenio_communities.cli.RecordIndexer.index_by_id")
-    result = runner.invoke(
-        request,
-        [community_id,record_id,"--accept"],
-        obj=script_info
-    )
-    args,_=mock_index.call_args
-    assert str(args[0]) == record_id
-    from invenio_records.models import RecordMetadata
-    metadata =RecordMetadata.query.filter_by(id=record_id).one().json
-    assert metadata["communities"] == ["comm1"]
+    with patch("invenio_communities.cli.RecordIndexer.index_by_id") as mock_index:
+        result = runner.invoke(
+            request,
+            [community_id,record_id,"--accept"],
+            obj=script_info
+        )
+        args,_=mock_index.call_args
+        assert str(args[0]) == record_id
+        from invenio_records.models import RecordMetadata
+        metadata =RecordMetadata.query.filter_by(id=record_id).one().json
+        assert metadata["communities"] == ["comm1"]
 
     # accept is false
     with patch("invenio_communities.cli.db.session.commit", side_effect=Exception('')):

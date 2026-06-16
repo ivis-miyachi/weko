@@ -30,16 +30,23 @@ import pytest
 from datetime import datetime,timedelta
 from unittest.mock import patch
 from kombu import Exchange, Queue
-from flask import Flask
+from mock import patch
+from click.testing import CliRunner
+from flask import Blueprint, Flask
 from flask_admin import Admin
+from flask_assets import assets
+from flask_babel import Babel
 from flask_menu import Menu
 from celery.messaging import establish_connection
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionRoles, ActionUsers
 from invenio_accounts import InvenioAccounts
 from invenio_accounts.models import Role, User
-from invenio_accounts.testutils import create_test_user
+from invenio_accounts.testutils import create_test_user, login_user_via_session
+from invenio_admin import InvenioAdmin
 from invenio_assets import InvenioAssets
+from invenio_cache import InvenioCache
+from invenio_communities import InvenioCommunities
 from invenio_communities.models import Community
 from invenio_db import InvenioDB
 from invenio_db import db as db_
@@ -63,8 +70,8 @@ from invenio_pidrelations.models import PIDRelation
 from invenio_pidstore import InvenioPIDStore
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_pidrelations.config import PIDRELATIONS_RELATION_TYPES
-from invenio_pidrelations.contrib.versioning import PIDVersioning
-from invenio_pidrelations.contrib.records import RecordDraft
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
+from invenio_pidrelations.contrib.draft import PIDNodeDraft
 from invenio_records import InvenioRecords
 from weko_redis.redis import RedisConnection
 from invenio_search import InvenioSearch
@@ -90,7 +97,7 @@ from weko_records_ui.config import WEKO_RECORDS_UI_LICENSE_DICT
 from weko_schema_ui.config import WEKO_SCHEMA_JPCOAR_V2_SCHEMA_NAME ,WEKO_SCHEMA_JPCOAR_V2_RESOURCE_TYPE_REPLACE,WEKO_SCHEMA_JPCOAR_V2_NAMEIDSCHEME_REPLACE
 from weko_schema_ui.models import OAIServerSchema
 from weko_search_ui import WekoSearchUI
-from weko_search_ui.config import WEKO_SEARCH_REST_ENDPOINTS,RECORDS_REST_SORT_OPTIONS,INDEXER_DEFAULT_DOCTYPE,INDEXER_FILE_DOC_TYPE
+from weko_search_ui.config import WEKO_SEARCH_REST_ENDPOINTS,RECORDS_REST_SORT_OPTIONS
 from weko_user_profiles.models import UserProfile
 from weko_user_profiles.config import WEKO_USERPROFILES_ROLES,WEKO_USERPROFILES_GENERAL_ROLE
 from weko_workflow import WekoWorkflow
@@ -194,9 +201,10 @@ def base_app(instance_path):
         WEKO_SCHEMA_JPCOAR_V2_SCHEMA_NAME=WEKO_SCHEMA_JPCOAR_V2_SCHEMA_NAME,
         WEKO_SCHEMA_JPCOAR_V2_RESOURCE_TYPE_REPLACE=WEKO_SCHEMA_JPCOAR_V2_RESOURCE_TYPE_REPLACE,
         WEKO_SCHEMA_JPCOAR_V2_NAMEIDSCHEME_REPLACE=WEKO_SCHEMA_JPCOAR_V2_NAMEIDSCHEME_REPLACE,
-        SEARCH_ELASTIC_HOSTS=os.environ.get("INVENIO_ELASTICSEARCH_HOST", "elasticsearch"),
+        SEARCH_ELASTIC_HOSTS=os.environ.get('SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_HOSTS=os.environ.get('SEARCH_HOST', 'opensearch'),
         SEARCH_INDEX_PREFIX="{}-".format('test'),
-        SEARCH_CLIENT_CONFIG=dict(timeout=120, max_retries=10),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         OAISERVER_ID_PREFIX="oai:inveniosoftware.org:recid/",
         OAISERVER_RECORD_INDEX="_all",
         OAISERVER_REGISTER_SET_SIGNALS=True,
@@ -234,8 +242,8 @@ def base_app(instance_path):
         WEKO_USERPROFILES_GENERAL_ROLE=WEKO_USERPROFILES_GENERAL_ROLE,
         CACHE_REDIS_DB = 2,
         WEKO_DEPOSIT_ITEMS_CACHE_PREFIX=WEKO_DEPOSIT_ITEMS_CACHE_PREFIX,
-        INDEXER_DEFAULT_DOCTYPE=INDEXER_DEFAULT_DOCTYPE,
-        INDEXER_FILE_DOC_TYPE=INDEXER_FILE_DOC_TYPE,
+        # INDEXER_DEFAULT_DOCTYPE="item-v1.0.0",
+        # INDEXER_FILE_DOC_TYPE="item-v1.0.0",
         WEKO_INDEX_TREE_DEFAULT_DISPLAY_NUMBER=WEKO_INDEX_TREE_DEFAULT_DISPLAY_NUMBER,
         DEPOSIT_DEFAULT_JSONSCHEMA=DEPOSIT_DEFAULT_JSONSCHEMA,
         DEPOSIT_JSONSCHEMAS_PREFIX=DEPOSIT_JSONSCHEMAS_PREFIX,
@@ -267,6 +275,7 @@ def base_app(instance_path):
     InvenioDB(app_)
     InvenioAccounts(app_)
     InvenioAccess(app_)
+    InvenioCache(app_)
     InvenioPIDStore(app_)
     InvenioRecords(app_)
     InvenioRecordsUI(app_)
@@ -318,7 +327,7 @@ def client(app):
     Yields:
         FlaskClient: test client
     """
-    app.register_blueprint(weko_items_ui_blueprint, url_prefix="/items")
+    # app.register_blueprint(weko_items_ui_blueprint, url_prefix="/items")
     with app.test_client() as client:
         yield client
 
@@ -340,7 +349,7 @@ def esindex(app,db_records, es):
     index_name = app.config["INDEXER_DEFAULT_INDEX"]
 
     for depid, recid, parent, doi, record, item in db_records:
-        es.index(index=index_name, doc_type='item-v1.0.0', id=record.id, body=record, refresh='true')
+        es.index(index=index_name, id=record.id, body=record, refresh='true')
     return es
 
 @pytest.fixture()
@@ -380,18 +389,28 @@ def es(app):
 @pytest.fixture()
 def users(app, db):
     """Create users."""
+    db.create_all()  # データベースの初期化
+
     ds = app.extensions["invenio-accounts"].datastore
     user_count = User.query.filter_by(email="user@test.org").count()
+
     if user_count != 1:
-        user = create_test_user(email="user@test.org")
-        contributor = create_test_user(email="contributor@test.org")
-        comadmin = create_test_user(email="comadmin@test.org")
-        repoadmin = create_test_user(email="repoadmin@test.org")
-        sysadmin = create_test_user(email="sysadmin@test.org")
-        generaluser = create_test_user(email="generaluser@test.org")
-        originalroleuser = create_test_user(email="originalroleuser@test.org")
-        originalroleuser2 = create_test_user(email="originalroleuser2@test.org")
+        # ユーザーが存在しない場合は新規作成
+        user = User(email="user@test.org", password="password", active=True)
+        contributor = User(email="contributor@test.org", password="password", active=True)
+        comadmin = User(email="comadmin@test.org", password="password", active=True)
+        repoadmin = User(email="repoadmin@test.org", password="password", active=True)
+        sysadmin = User(email="sysadmin@test.org", password="password", active=True)
+        generaluser = User(email="generaluser@test.org", password="password", active=True)
+        originalroleuser = User(email="originalroleuser@test.org", password="password", active=True)
+        originalroleuser2 = User(email="originalroleuser2@test.org", password="password", active=True)
+
+        # データベースに追加
+        db.session.add_all([user, contributor, comadmin, repoadmin, sysadmin, generaluser, originalroleuser, originalroleuser2])
+        db.session.commit()
+
     else:
+        # 既存のユーザーを取得
         user = User.query.filter_by(email="user@test.org").first()
         contributor = User.query.filter_by(email="contributor@test.org").first()
         comadmin = User.query.filter_by(email="comadmin@test.org").first()
@@ -417,9 +436,7 @@ def users(app, db):
         general_role = Role.query.filter_by(name="General").first()
         originalrole = Role.query.filter_by(name="Original Role").first()
 
-
-
-    # Assign access authorization
+    # Access Authorizationの割り当て
     with db.session.begin_nested():
         action_users = [
             ActionUsers(action="superuser-access", user=sysadmin),
@@ -445,7 +462,6 @@ def users(app, db):
             ActionRoles(action="stats-api-access", role=repoadmin_role),
             ActionRoles(action="read-style-action", role=repoadmin_role),
             ActionRoles(action="update-style-action", role=repoadmin_role),
-            ActionRoles(action="detail-page-acces", role=repoadmin_role),
             ActionRoles(action="admin-access", role=comadmin_role),
             ActionRoles(action="index-tree-access", role=comadmin_role),
             ActionRoles(action="indextree-journal-access", role=comadmin_role),
@@ -455,26 +471,13 @@ def users(app, db):
             ActionRoles(action="files-rest-object-delete-version", role=comadmin_role),
             ActionRoles(action="files-rest-object-read", role=comadmin_role),
             ActionRoles(action="search-access", role=comadmin_role),
-            ActionRoles(action="detail-page-acces", role=comadmin_role),
             ActionRoles(action="download-original-pdf-access", role=comadmin_role),
-            ActionRoles(action="author-access", role=comadmin_role),
-            ActionRoles(action="items-autofill", role=comadmin_role),
-            ActionRoles(action="detail-page-acces", role=comadmin_role),
-            ActionRoles(action="detail-page-acces", role=comadmin_role),
             ActionRoles(action="item-access", role=contributor_role),
             ActionRoles(action="files-rest-bucket-update", role=contributor_role),
             ActionRoles(action="files-rest-object-delete", role=contributor_role),
-            ActionRoles(
-                action="files-rest-object-delete-version", role=contributor_role
-            ),
             ActionRoles(action="files-rest-object-read", role=contributor_role),
             ActionRoles(action="search-access", role=contributor_role),
-            ActionRoles(action="detail-page-acces", role=contributor_role),
-            ActionRoles(action="download-original-pdf-access", role=contributor_role),
             ActionRoles(action="author-access", role=contributor_role),
-            ActionRoles(action="items-autofill", role=contributor_role),
-            ActionRoles(action="detail-page-acces", role=contributor_role),
-            ActionRoles(action="detail-page-acces", role=contributor_role),
         ]
         db.session.add_all(action_roles)
         ds.add_role_to_user(sysadmin, sysadmin_role)
@@ -492,17 +495,9 @@ def users(app, db):
         {"email": repoadmin.email, "id": repoadmin.id, "obj": repoadmin},
         {"email": sysadmin.email, "id": sysadmin.id, "obj": sysadmin},
         {"email": comadmin.email, "id": comadmin.id, "obj": comadmin},
-        {"email": generaluser.email, "id": generaluser.id, "obj": sysadmin},
-        {
-            "email": originalroleuser.email,
-            "id": originalroleuser.id,
-            "obj": originalroleuser,
-        },
-        {
-            "email": originalroleuser2.email,
-            "id": originalroleuser2.id,
-            "obj": originalroleuser2,
-        },
+        {"email": generaluser.email, "id": generaluser.id, "obj": generaluser},
+        {"email": originalroleuser.email, "id": originalroleuser.id, "obj": originalroleuser},
+        {"email": originalroleuser2.email, "id": originalroleuser2.id, "obj": originalroleuser2},
         {"email": user.email, "id": user.id, "obj": user},
     ]
 
@@ -649,7 +644,7 @@ def db_userprofile(app, db):
 
 @pytest.fixture()
 def db_itemtype2(app, db):
-    item_type_name = ItemTypeName(id=2,
+    item_type_name = ItemTypeName(id=None,
         name="テストアイテムタイプ2", has_site_license=True, is_active=True
     )
     item_type_schema = dict()
@@ -679,7 +674,7 @@ def db_itemtype2(app, db):
         is_deleted=False,
     )
 
-    item_type_mapping = ItemTypeMapping(id=2,item_type_id=2, mapping=item_type_mapping)
+    item_type_mapping = ItemTypeMapping(id=None,item_type_id=2, mapping=item_type_mapping)
 
     with db.session.begin_nested():
         db.session.add(item_type_name)
@@ -690,7 +685,7 @@ def db_itemtype2(app, db):
 
 @pytest.fixture()
 def db_itemtype3(app, db):
-    item_type_name = ItemTypeName(id=3,
+    item_type_name = ItemTypeName(id=None,
         name="テストアイテムタイプ3", has_site_license=True, is_active=True
     )
     item_type_schema = dict()
@@ -721,7 +716,7 @@ def db_itemtype3(app, db):
         is_deleted=False,
     )
 
-    item_type_mapping = ItemTypeMapping(id=3,item_type_id=3, mapping=item_type_mapping)
+    item_type_mapping = ItemTypeMapping(id=None,item_type_id=3, mapping=item_type_mapping)
 
     with db.session.begin_nested():
         db.session.add(item_type_name)
@@ -732,7 +727,7 @@ def db_itemtype3(app, db):
 
 @pytest.fixture()
 def db_itemtype4(app, db):
-    item_type_name = ItemTypeName(id=4,
+    item_type_name = ItemTypeName(id=None,
         name="テストアイテムタイプ4", has_site_license=True, is_active=True
     )
     item_type_schema = dict()
@@ -763,7 +758,7 @@ def db_itemtype4(app, db):
         is_deleted=False,
     )
 
-    item_type_mapping = ItemTypeMapping(id=4,item_type_id=4, mapping=item_type_mapping)
+    item_type_mapping = ItemTypeMapping(id=None,item_type_id=4, mapping=item_type_mapping)
 
     with db.session.begin_nested():
         db.session.add(item_type_name)
@@ -774,7 +769,7 @@ def db_itemtype4(app, db):
 
 @pytest.fixture()
 def db_itemtype5(app, db):
-    item_type_name = ItemTypeName(id=5,
+    item_type_name = ItemTypeName(id=None,
         name="テストアイテムタイプ5", has_site_license=True, is_active=True
     )
     item_type_schema = dict()
@@ -857,8 +852,50 @@ def db_itemtype6(app, db):
     return {"item_type_name": item_type_name, "item_type": item_type, "item_type_mapping":item_type_mapping}
 
 @pytest.fixture()
+def db_itemtype6(app, db):
+    item_type_name = ItemTypeName(id=6,
+        name="テストアイテムタイプ6", has_site_license=True, is_active=True
+    )
+    item_type_schema = dict()
+    with open("tests/data/itemtype5_schema.json", "r") as f:
+        item_type_schema = json.load(f)
+
+    item_type_form = dict()
+    with open("tests/data/itemtype5_form.json", "r") as f:
+        item_type_form = json.load(f)
+
+    item_type_render = dict()
+    with open("tests/data/itemtype5_render.json", "r") as f:
+        item_type_render = json.load(f)
+
+    item_type_mapping = dict()
+    with open("tests/data/itemtype5_mapping.json", "r") as f:
+        item_type_mapping = json.load(f)
+
+    item_type = ItemType(
+        id=6,
+        name_id=6,
+        harvesting_type=True,
+        schema=item_type_schema,
+        form=item_type_form,
+        render=item_type_render,
+        tag=1,
+        version_id=1,
+        is_deleted=False,
+    )
+
+    item_type_mapping = ItemTypeMapping(id=6,item_type_id=6, mapping=item_type_mapping)
+
+    with db.session.begin_nested():
+        db.session.add(item_type_name)
+        db.session.add(item_type)
+        db.session.add(item_type_mapping)
+
+    return {"item_type_name": item_type_name, "item_type": item_type, "item_type_mapping":item_type_mapping}
+
+@pytest.fixture()
 def db_itemtype(app, db):
-    item_type_name = ItemTypeName(id=1,
+    item_type_name = ItemTypeName(id=None,
         name="テストアイテムタイプ", has_site_license=True, is_active=True
     )
     item_type_schema = dict()
@@ -889,7 +926,7 @@ def db_itemtype(app, db):
         is_deleted=False,
     )
 
-    item_type_mapping = ItemTypeMapping(id=1,item_type_id=1, mapping=item_type_mapping)
+    item_type_mapping = ItemTypeMapping(id=None,item_type_id=1, mapping=item_type_mapping)
 
     with db.session.begin_nested():
         db.session.add(item_type_name)
@@ -23319,7 +23356,7 @@ def make_record(db, indexer, i, files, thumbnail=None):
         status=PIDStatus.REGISTERED,
     )
 
-    h1 = PIDVersioning(parent=parent)
+    h1 = PIDNodeVersioning(parent=parent)
     h1.insert_child(child=recid)
     h1.insert_child(child=recid_v1)
     RecordDraft.link(recid, depid)

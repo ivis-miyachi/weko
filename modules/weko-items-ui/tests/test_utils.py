@@ -7,13 +7,13 @@ from collections import OrderedDict
 from unittest.mock import MagicMock, Mock, mock_open, patch
 import copy
 import tempfile
+
 import pytz
 import shutil
 from dictdiffer import diff
-from elasticsearch import exceptions as es_exceptions
 from six import BytesIO
 from sqlalchemy.exc import SQLAlchemyError
-from invenio_files_rest.models import Bucket, ObjectVersion
+from invenio_search.engine import search
 
 import pytest
 from elasticsearch.exceptions import NotFoundError
@@ -26,10 +26,9 @@ from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from jsonschema import SchemaError, ValidationError
 from werkzeug.exceptions import BadRequest
 from invenio_accounts.testutils import login_user_via_session
-from weko_deposit.api import WekoDeposit, WekoRecord, WekoFileObject
+from weko_deposit.api import WekoDeposit, WekoRecord
 from weko_records.api import ItemTypes
 from weko_records.models import ItemType, ItemTypeMapping, ItemTypeName
-from weko_admin.models import ApiCertificate
 from weko_workflow.api import WorkActivity
 from weko_admin.models import RankingSettings
 from weko_workflow.models import (
@@ -8572,8 +8571,24 @@ def test__get_max_export_items(app,users):
         with patch("flask_login.utils._get_user", return_value=users[2]["obj"]):
             size = WEKO_ITEMS_UI_MAX_EXPORT_NUM_PER_ROLE[users[2]['obj'].roles[0].name]
             assert _get_max_export_items() == size
-
-
+    
+    with app.test_request_context():
+        size = WEKO_ITEMS_UI_MAX_EXPORT_NUM_PER_ROLE[users[2]['obj'].roles[0].name]
+        app.config['WEKO_ITEMS_UI_DEFAULT_MAX_EXPORT_NUM'] = 60
+        with patch("flask_login.utils._get_user", return_value=users[2]["obj"]):
+            assert _get_max_export_items() == size
+    
+    # with patch("flask_sqlalchemy._QueryProperty.__get__") as mock_query:
+    with patch("weko_items_ui.utils.db.session.query", side_effect=Exception("test_error")):
+        size = WEKO_ITEMS_UI_MAX_EXPORT_NUM_PER_ROLE[users[2]['obj'].roles[0].name]
+        app.config['WEKO_ITEMS_UI_DEFAULT_MAX_EXPORT_NUM'] = 20
+        
+        # app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///dummy.db"
+        # mock_query.return_value.all.side_effect = Exception("test_error")
+        # mock_query.return_value.all.side_effect = Exception("test_error")
+        with patch("flask_login.utils._get_user", return_value=users[2]["obj"]):
+            assert _get_max_export_items() == 20
+            
 # def _export_item(record_id,
 #     def del_hide_sub_metadata(keys, metadata):
 # .tox/c1/bin/pytest --cov=weko_items_ui tests/test_utils.py::test__export_item -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-items-ui/.tox/c1/tmp
@@ -9363,7 +9378,7 @@ def test_translate_schema_form(db_itemtype):
     assert list(_diff)==[]
 
 # .tox/c1/bin/pytest --cov=weko_items_ui tests/test_utils.py::test_WekoQueryRankingHelper_get -v -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-items-ui/.tox/c1/tmp
-def test_WekoQueryRankingHelper_get(app, users, db_records,esindex,mocker):
+def test_WekoQueryRankingHelper_get(app, users, db_records,esindex):
     data = {
         "aggregations": {
             "my_buckets": {
@@ -9409,7 +9424,7 @@ def test_WekoQueryRankingHelper_get(app, users, db_records,esindex,mocker):
         assert result == []
 
     # raise NotFoundError
-    with patch("invenio_stats.queries.ESWekoRankingQuery.run",side_effect=es_exceptions.NotFoundError(404,"test_error")):
+    with patch("invenio_stats.queries.ESWekoRankingQuery.run",side_effect=search.OpenSearchException.NotFoundError(404,"test_error")):
         result = WekoQueryRankingHelper.get(
             start_date="2023-08-19",
             end_date="2023-09-01",
@@ -9423,17 +9438,17 @@ def test_WekoQueryRankingHelper_get(app, users, db_records,esindex,mocker):
 
 # def get_ranking(settings):
 # .tox/c1/bin/pytest --cov=weko_items_ui tests/test_utils.py::test_get_ranking -v -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-items-ui/.tox/c1/tmp
-def test_get_ranking(app, users, db_records, db_ranking, esindex,mocker):
+def test_get_ranking(app, users, db_records, db_ranking, esindex):
     index_json = [
         {"children":[],"cid":1,"pid":0,"name":"Index(public_state = True,harvest_public_state = True)","id":"1"},
         {"children":[],"cid":2,"pid":0,"name":"Index(public_state = True,harvest_public_state = False)","id":"2"},
         {"children":[],"cid":3,"pid":0,"name":"Index(public_state = False,harvest_public_state = True)","id":"3"},
         {"children":[],"cid":4,"pid":0,"name":"Index(public_state = False,harvest_public_state = False)","id":"4"}
     ]
-    mocker.patch("weko_items_ui.utils.Indexes.get_browsing_tree_ignore_more",return_value=index_json)
-    mocker.patch("weko_items_ui.utils.get_options_and_order_list", return_value=(None, None))
-    mocker.patch("weko_items_ui.utils.get_hide_list_by_schema_form", return_value=[])
-    mocker.patch("weko_deposit.api.WekoRecord.switching_language", return_value="test")
+    patch("weko_items_ui.utils.Indexes.get_browsing_tree_ignore_more",return_value=index_json)
+    patch("weko_items_ui.utils.get_options_and_order_list", return_value=(None, None))
+    patch("weko_items_ui.utils.get_hide_list_by_schema_form", return_value=[])
+    patch("weko_deposit.api.WekoRecord.switching_language", return_value="test")
     data = [{'key': '3', 'count': 5}, {'key': '1', 'count': 4}, {'key': '4', 'count': 2}]
     with patch("weko_items_ui.utils.WekoQueryRankingHelper.get", return_value=data):
         settings = db_ranking['settings']
@@ -10257,6 +10272,8 @@ def test_save_title(app, db_itemtype, db_workflow, db_records, users):
         "endpoints": {"initialization": "/api/deposits/redirect/1.0"},
     }
     save_title("A-00000000-00000", request_data)
+    # Need to import here to avoid circular import
+    from weko_workflow.api import WorkActivity
     activity = WorkActivity()
     db_activity = activity.get_activity_detail("A-00000000-00000")
     assert db_activity.title == "タイトル"

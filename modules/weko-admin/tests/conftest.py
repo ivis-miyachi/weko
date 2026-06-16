@@ -26,7 +26,7 @@ import tempfile
 import uuid
 import json
 from datetime import datetime, timedelta
-from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch
 from invenio_accounts.utils import jwt_create_token
 from invenio_indexer import InvenioIndexer
 import pytest
@@ -34,7 +34,7 @@ from invenio_indexer.api import RecordIndexer
 from invenio_records import Record
 
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_mail import Mail
 from flask_menu import Menu
 from flask.cli import ScriptInfo
@@ -97,7 +97,7 @@ from weko_admin.config import WEKO_ADMIN_COMMUNITY_ACCESS_LIST,WEKO_ADMIN_REPOSI
 from .helpers import json_data, create_record
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def instance_path():
     """Temporary instance path."""
     path = tempfile.mkdtemp()
@@ -213,7 +213,7 @@ def base_app(instance_path, cache_config,request ,search_class):
     yield app_
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def app(base_app):
     """Flask application fixture."""
 
@@ -221,7 +221,7 @@ def app(base_app):
         yield base_app
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def db(app):
     # if not database_exists(str(db_.engine.url)) and \
     #         app.config['SQLALCHEMY_DATABASE_URI'] != 'sqlite://':
@@ -233,12 +233,13 @@ def db(app):
     db_.session.remove()
     db_.drop_all()
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def i18n_app(app):
     with app.test_request_context(
         headers=[('Accept-Language','ja')]):
         app.extensions['invenio-oauth2server'] = 1
         app.extensions['invenio-queues'] = 1
+        app.extensions['invenio-i18n'].language = "en"
         yield app
 
 def _database_setup(app, request):
@@ -260,23 +261,23 @@ def _database_setup(app, request):
     request.addfinalizer(teardown)
     return app
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def api(app):
     app.register_blueprint(blueprint_api, url_prefix='/api/admin')
     with app.test_client() as client:
         yield client
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def client(app):
     """Get test client."""
     WekoAdmin(app)
     with app.test_client() as client:
         yield client
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def admin_app(instance_path):
-    base_app = Flask(__name__, instance_path=instance_path)
-    base_app.config.update(
+    base_app_ = Flask(__name__, instance_path=instance_path)
+    base_app_.config.update(
         SECRET_KEY='SECRET KEY',
         SESSION_TYPE='memcached',
         SERVER_NAME='test_server',
@@ -284,18 +285,29 @@ def admin_app(instance_path):
         #     'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
         SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
                                           'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
-        WEKO_ADMIN_FACET_SEARCH_SETTING={"name_en": "","name_jp": "","mapping": "","active": True,"aggregations": [],"display_number": 5,"is_open": True,"search_condition": "OR","ui_type": "CheckboxList"},
+        I18N_LANGUAGES=[("ja","Japanese"), ("en","English")],
+        WEKO_ADMIN_FACET_SEARCH_SETTING={"name_en": "","name_jp": "","mapping": "","active": True,"aggregations": []},
         WEKO_ADMIN_FACET_SEARCH_SETTING_TEMPLATE="weko_admin/admin/facet_search_setting.html"
     )
-    base_app.testing = True
-    InvenioDB(base_app)
-    InvenioAccounts(base_app)
-    InvenioAccess(base_app)
+    base_app_.testing = True
+    InvenioDB(base_app_)
+    InvenioAccounts(base_app_)
+    InvenioAccess(base_app_)
+    InvenioI18N(base_app_)
 
-    with base_app.app_context():
-        yield base_app
+    with base_app_.app_context():
+        yield base_app_
 
-@pytest.yield_fixture()
+@pytest.fixture()
+def i18n_admin_app(admin_app):
+    with admin_app.test_request_context(
+        headers=[('Accept-Language','ja')]):
+        admin_app.extensions['invenio-oauth2server'] = 1
+        admin_app.extensions['invenio-queues'] = 1
+        yield admin_app
+
+
+@pytest.fixture()
 def admin_db(admin_app):
     if not database_exists(str(db_.engine.url)):
                 create_database(str(db_.engine.url))
@@ -1131,7 +1143,7 @@ def identifier(db):
     db.session.commit()
     return iden
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def i18n_app(app):
     with app.test_request_context(headers=[("Accept-Language", "ja")]):
         app.extensions["invenio-oauth2server"] = 1
@@ -1145,7 +1157,7 @@ def search_class():
 class MockEs():
     def __init__(self,**keywargs):
         self.indices = self.MockIndices()
-        self.es = Elasticsearch()
+        self.es = OpenSearch()
         self.cluster = self.MockCluster()
     def index(self, id="",version="",version_type="",index="",doc_type="",body="",**arguments):
         return {"_shards":{"failed":0} }

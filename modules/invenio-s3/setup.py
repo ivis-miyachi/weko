@@ -14,21 +14,19 @@ readme = open('README.rst').read()
 history = open('CHANGES.rst').read()
 
 tests_require = [
-    'coverage>=4.5.3,<5.0.0',
-    'mock>=3.0.0,<4.0.0',
-    'moto==1.3.5',
-    'pytest>=4.6.4,<5.0.0',
-    'pytest-cache',
-    'pytest-cov',
-    'pytest-pep8',
-    'pytest-invenio',
+    'pytest-invenio>=1.4.2',
+    'invenio-base>=1.2.5',
+    'invenio-app>=1.3.1',
+    'invenio-db[all]>=1.0.9',
+    'moto>=1.3.7',
+    'redis>=2.10.5',
     'responses',
 ]
 
 extras_require = {
     'docs': [
-        'Sphinx>=1.5.1',
-    ],
+        'Sphinx>=3.0.1,<3.0.2',
+],
     'tests': tests_require,
 }
 
@@ -41,9 +39,9 @@ setup_requires = [
 ]
 
 install_requires = [
-    'boto3>=1.9.83',
-    'invenio-files-rest>=1.0.0',
-    's3fs>=0.1.5,<0.3.0', # Newer versions only allow python >= 3.5
+    'boto3>=1.9.91',
+    'invenio-files-rest>=1.3.0',
+    's3fs>=0.3.0',
 ]
 
 packages = find_packages()
@@ -88,10 +86,10 @@ setup(
         'Programming Language :: Python',
         'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
         'Topic :: Software Development :: Libraries :: Python Modules',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         'Development Status :: 4 - Beta',
     ],
 )

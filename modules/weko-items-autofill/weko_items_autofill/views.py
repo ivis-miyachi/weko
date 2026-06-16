@@ -11,7 +11,7 @@ from __future__ import absolute_import, print_function
 import traceback
 
 from flask import Blueprint, current_app, jsonify, render_template, request
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import login_required
 from invenio_db import db
 from weko_accounts.utils import login_required_customize

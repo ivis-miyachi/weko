@@ -40,22 +40,18 @@ from click.testing import CliRunner
 from flask import Blueprint, Flask
 from flask_assets import assets
 from flask_admin import Admin
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_menu import Menu
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionRoles, ActionUsers
 from invenio_accounts import InvenioAccounts
 from invenio_accounts.models import Role, User
 from invenio_accounts.testutils import create_test_user, login_user_via_session
-from invenio_accounts.views.settings import blueprint as invenio_accounts_blueprint
 from invenio_admin import InvenioAdmin
-from invenio_admin.views import blueprint as invenio_admin_blueprint
 from invenio_assets import InvenioAssets
-from invenio_assets.cli import collect, npm
 from invenio_cache import InvenioCache
 from invenio_communities import InvenioCommunities
 from invenio_communities.models import Community
-from invenio_communities.views.ui import blueprint as invenio_communities_blueprint
 from invenio_db import InvenioDB
 from invenio_db import db as db_
 from invenio_deposit import InvenioDeposit
@@ -84,7 +80,6 @@ from invenio_records_rest import InvenioRecordsREST
 from invenio_rest import InvenioREST
 from invenio_search import InvenioSearch, RecordsSearch, current_search, current_search_client
 from invenio_stats import InvenioStats
-from invenio_stats.config import SEARCH_INDEX_PREFIX as index_prefix
 from invenio_theme import InvenioTheme
 from kombu import Exchange, Queue
 from unittest.mock import patch
@@ -108,6 +103,7 @@ from weko_items_ui import WekoItemsUI
 from weko_items_ui.views import blueprint as weko_items_ui_blueprint
 from weko_items_ui.views import blueprint_api as weko_items_ui_blueprint_api
 from weko_records import WekoRecords
+from weko_records.config import WEKO_ITEMTYPE_EXCLUDED_KEYS as _WEKO_ITEMTYPE_EXCLUDED_KEYS
 from weko_records.models import ItemType, ItemTypeMapping, ItemTypeName,ItemTypeProperty
 from weko_records_ui import WekoRecordsUI
 from weko_records_ui.config import WEKO_RECORDS_UI_LICENSE_DICT
@@ -116,8 +112,6 @@ from weko_schema_ui import WekoSchemaUI
 from weko_schema_ui.models import OAIServerSchema
 from weko_search_ui import WekoSearchREST, WekoSearchUI
 from weko_search_ui.config import (
-    INDEXER_DEFAULT_DOCTYPE,
-    INDEXER_FILE_DOC_TYPE,
     RECORDS_REST_SORT_OPTIONS,
     SEARCH_UI_SEARCH_INDEX,
     WEKO_SEARCH_REST_ENDPOINTS,
@@ -142,14 +136,14 @@ import tempfile
 
 import pytest
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from invenio_assets import InvenioAssets
 from invenio_i18n import InvenioI18N
 from invenio_theme import InvenioTheme
 from weko_records import WekoRecords
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def instance_path():
     """Temporary instance path."""
     path = tempfile.mkdtemp()
@@ -169,11 +163,8 @@ def base_app(instance_path):
         SECRET_KEY="SECRET_KEY",
         TESTING=True,
         SERVER_NAME="test_server",
-        # SQLALCHEMY_DATABASE_URI=os.environ.get(
-        #     "SQLALCHEMY_DATABASE_URI", "sqlite:///test.db"
-        # ),
-        SQLALCHEMY_DATABASE_URI=os.getenv(
-            'SQLALCHEMY_DATABASE_URI', 'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
+        SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
+                                          'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
         SQLALCHEMY_TRACK_MODIFICATIONS=True,
         ACCOUNTS_USERINFO_HEADERS=True,
         WEKO_PERMISSION_SUPER_ROLE_USER=[
@@ -231,14 +222,15 @@ def base_app(instance_path):
         WEKO_USERPROFILES_GENERAL_ROLE=WEKO_USERPROFILES_GENERAL_ROLE,
         CACHE_REDIS_DB = 0,
         WEKO_DEPOSIT_ITEMS_CACHE_PREFIX=WEKO_DEPOSIT_ITEMS_CACHE_PREFIX,
-        INDEXER_DEFAULT_DOCTYPE=INDEXER_DEFAULT_DOCTYPE,
-        INDEXER_FILE_DOC_TYPE=INDEXER_FILE_DOC_TYPE,
+        # INDEXER_DEFAULT_DOCTYPE=INDEXER_DEFAULT_DOCTYPE,
+        # INDEXER_FILE_DOC_TYPE=INDEXER_FILE_DOC_TYPE,
         WEKO_INDEX_TREE_DEFAULT_DISPLAY_NUMBER=WEKO_INDEX_TREE_DEFAULT_DISPLAY_NUMBER,
         DEPOSIT_DEFAULT_JSONSCHEMA=DEPOSIT_DEFAULT_JSONSCHEMA,
         DEPOSIT_JSONSCHEMAS_PREFIX=DEPOSIT_JSONSCHEMAS_PREFIX,
         WEKO_SEARCH_REST_ENDPOINTS=WEKO_SEARCH_REST_ENDPOINTS,
         INDEXER_MQ_QUEUE = Queue("indexer", exchange=Exchange("indexer", type="direct"), routing_key="indexer",queue_arguments={"x-queue-type":"quorum"}),
         I18N_LANGUAGES=[("ja", "Japanese"), ("en", "English")],
+        WEKO_ITEMTYPE_EXCLUDED_KEYS=_WEKO_ITEMTYPE_EXCLUDED_KEYS
     )
 
     app_.config['WEKO_SEARCH_REST_ENDPOINTS']['recid']['search_index']='test-weko'
@@ -308,7 +300,7 @@ def base_app(instance_path):
     return app_
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def app(base_app):
     """Flask application fixture."""
     with base_app.app_context():
@@ -316,7 +308,7 @@ def app(base_app):
 
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def client_api(app):
     app.register_blueprint(weko_items_ui_blueprint_api, url_prefix="/api/items")
     with app.test_client() as client:
@@ -324,7 +316,7 @@ def client_api(app):
 
 
 
-@pytest.yield_fixture()
+@pytest.fixture()
 def client(app):
     """make a test client.
 
@@ -334,7 +326,7 @@ def client(app):
     Yields:
         FlaskClient: test client
     """
-    app.register_blueprint(weko_items_ui_blueprint, url_prefix="/items")
+    # app.register_blueprint(weko_items_ui_blueprint, url_prefix="/items")
     with app.test_client() as client:
         yield client
 
@@ -550,6 +542,7 @@ def item_type(app,db):
     sync_sequence(db.session, ItemTypeMapping)
 
     return itemtype_list
+
 @pytest.fixture()
 def itemtype_props(app,db):
     data = json_data("data/item_type_props.json")
@@ -895,6 +888,18 @@ def rocrate_mapping(db, item_type):
     rocrate_mapping1 = RocrateMapping(2, mapping)
     with db.session.begin_nested():
         db.session.add(rocrate_mapping1)
+
+def test_super_role_user_config(app_):
+    # 'WEKO_PERMISSION_SUPER_ROLE_USER' が正しく設定されているか確認
+    assert app_.config["WEKO_PERMISSION_SUPER_ROLE_USER"] == "Administrator"
+
+def test_cache_type_config(app_):
+    # 'CACHE_TYPE' が 'simple' に設定されているか確認
+    assert app_.config["CACHE_TYPE"] == "simple"
+
+def test_logging_level_config(app_):
+    # ログレベルの設定が正しいか確認
+    assert app_.config["LOGGING_LEVEL"] == "DEBUG"
 
 # This fixture needs a param to set the item type ID
 @pytest.fixture

@@ -32,13 +32,12 @@ from os.path import join
 from time import sleep
 import pytest
 import requests
-from elasticsearch import Elasticsearch
-from elasticsearch import VERSION as ES_VERSION
-from elasticsearch.exceptions import RequestError
+from opensearchpy import OpenSearch
+from opensearchpy.exceptions import RequestError
 from flask import Flask, url_for
 from flask.cli import ScriptInfo
-from flask_babelex import Babel
-from flask_babelex import lazy_gettext as _
+from flask_babel import Babel
+from flask_babel import lazy_gettext as _
 from flask_celeryext import FlaskCeleryExt
 from flask_login import LoginManager, current_user, login_user
 from flask_menu import Menu
@@ -52,7 +51,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy_utils.functions import create_database, database_exists, drop_database
 from werkzeug.local import LocalProxy
 from invenio_records.api import Record
-from invenio_stats.processors import EventsIndexer
 from .helpers import create_record, create_record2, json_data, bagify
 
 from invenio_access import InvenioAccess
@@ -101,8 +99,8 @@ from invenio_oaiharvester.models import HarvestSettings
 from invenio_oaiserver import InvenioOAIServer
 from invenio_oaiserver.models import Identify, OAISet
 from invenio_pidrelations import InvenioPIDRelations
-from invenio_pidrelations.contrib.records import RecordDraft
-from invenio_pidrelations.contrib.versioning import PIDVersioning
+from invenio_pidrelations.contrib.draft import PIDNodeDraft
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
 from invenio_pidrelations.models import PIDRelation
 from invenio_pidstore import InvenioPIDStore, current_pidstore
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus, RecordIdentifier
@@ -161,7 +159,7 @@ from weko_records_ui.models import PDFCoverPageSettings, RocrateMapping
 from weko_redis.redis import RedisConnection
 from weko_schema_ui.models import OAIServerSchema
 from weko_theme import WekoTheme
-from weko_theme.config import THEME_BODY_TEMPLATE, WEKO_THEME_ADMIN_ITEM_MANAGEMENT_INIT_TEMPLATE
+from weko_theme.config import THEME_BODY_TEMPLATE, WEKO_THEME_ADMIN_ITEM_MANAGEMENT_INIT_TEMPLATE, WEKO_COMMUNITIES_DEFAULT_PROPERTIES
 from weko_workflow import WekoWorkflow
 from weko_workflow.models import Action, ActionStatus, ActionStatusPolicy, Activity, FlowAction, FlowDefine, WorkFlow
 from weko_search_ui import WekoSearchREST, WekoSearchUI
@@ -304,7 +302,8 @@ def base_app(instance_path, search_class, request):
         #     "SQLALCHEMY_DATABASE_URI", "sqlite:///test.db"
         # ),
         SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI','postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
-        SEARCH_ELASTIC_HOSTS=os.environ.get("SEARCH_ELASTIC_HOSTS", "elasticsearch"),
+        SEARCH_ELASTIC_HOSTS=os.environ.get("SEARCH_ELASTIC_HOSTS", "opensearch"),
+        SEARCH_HOSTS=os.environ.get("SEARCH_HOST", "opensearch"),
         SQLALCHEMY_TRACK_MODIFICATIONS=True,
         JSONSCHEMAS_HOST="inveniosoftware.org",
         ACCOUNTS_USERINFO_HEADERS=True,
@@ -329,7 +328,7 @@ def base_app(instance_path, search_class, request):
         CHILD_INDEX_THUMBNAIL_HEIGHT = CHILD_INDEX_THUMBNAIL_HEIGHT,
         # SEARCH_ELASTIC_HOSTS=os.environ.get("INVENIO_ELASTICSEARCH_HOST"),
         SEARCH_INDEX_PREFIX="{}-".format("test"),
-        SEARCH_CLIENT_CONFIG=dict(timeout=120, max_retries=10),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         OAISERVER_ID_PREFIX="oai:inveniosoftware.org:recid/",
         OAISERVER_RECORD_INDEX="_all",
         OAISERVER_REGISTER_SET_SIGNALS=True,
@@ -699,6 +698,7 @@ def base_app(instance_path, search_class, request):
             "report part": "other",
             "conference object": "conference output",
         }
+        WEKO_COMMUNITIES_DEFAULT_PROPERTIES=WEKO_COMMUNITIES_DEFAULT_PROPERTIES
     )
     app_.url_map.converters["pid"] = PIDConverter
     app_.config["RECORDS_REST_ENDPOINTS"]["recid"]["search_class"] = search_class
@@ -791,8 +791,8 @@ def db(app):
 @pytest.yield_fixture()
 def i18n_app(app):
     with app.test_request_context(headers=[("Accept-Language", "ja")]):
-        app.extensions["invenio-oauth2server"] = 1
-        app.extensions["invenio-queues"] = 1
+        app.extensions["invenio-oauth2server"] = MagicMock()
+        app.extensions["invenio-queues"] = MagicMock()
         yield app
 
 
@@ -845,29 +845,7 @@ def client_request_args(app, file_instance_mock):
     # r = requests.post(url, files=files, data=values)
 
     with app.test_client() as client:
-        with patch("flask.templating._render", return_value=""):
-            r = client.get(
-                "/",
-                query_string={
-                    "index_id": "33",
-                    "page": 1,
-                    "count": 20,
-                    "term": 14,
-                    "lang": "en",
-                    "parent_id": 33,
-                    "index_info": {},
-                    "community": "comm1",
-                    "item_link": "1",
-                    "is_search": 1,
-                    "search_type": WEKO_SEARCH_TYPE_DICT["INDEX"],
-                    "is_change_identifier": True,
-                    "remote_addr": "0.0.0.0",
-                    "referrer": "test",
-                    "host": "127.0.0.1",
-                    # 'search_type': WEKO_SEARCH_TYPE_DICT["FULL_TEXT"],
-                },
-            )
-        yield r
+        yield client
 
 @pytest.yield_fixture()
 def client_request_args_FULL_TEXT(app, file_instance_mock):
@@ -1266,9 +1244,11 @@ def db_records(db, instance_path, users):
 @pytest.fixture()
 def db_records2(db, instance_path, users):
     with db.session.begin_nested():
-        Location.query.delete()
-        loc = Location(name="local", uri=instance_path, default=True)
-        db.session.add(loc)
+        locations = Location.query.filter_by(name="local").all()
+        if not locations:
+            Location.query.delete()
+            loc = Location(name="local", uri=instance_path, default=True)
+            db.session.add(loc)
     db.session.commit()
 
     record_data = json_data("data/test_records.json")
@@ -1905,6 +1885,7 @@ def generate_events(
     mock_queue.consume.return_value = generator_list()
     # mock_queue.routing_key = 'stats-file-download'
     mock_queue.routing_key = "generate-sample"
+    from invenio_stats.processors import EventsIndexer
 
     EventsIndexer(
         mock_queue, preprocessors=[build_file_unique_id], double_click_window=0
@@ -2561,7 +2542,7 @@ def es_records(app, db, db_index, location, db_itemtype, db_oaischema):
                 },
                 "item_title": "title",
                 "author_link": [],
-                "item_type_id": "1",
+                "item_type_id": "10",
                 "publish_date": "2022-08-20",
                 "publish_status": "1",
                 "weko_shared_ids": [],
@@ -2626,7 +2607,7 @@ def es_records(app, db, db_index, location, db_itemtype, db_oaischema):
                 "owner": 1,
                 "title": "title",
                 "owners": [1],
-                "item_type_id": 1,
+                "item_type_id": 10,
                 "status": "keep",
                 "$schema": "/items/jsonschema/1",
                 "item_title": "item_title",
@@ -2750,7 +2731,7 @@ def es_records(app, db, db_index, location, db_itemtype, db_oaischema):
             )
 
     sleep(3)
-    es = Elasticsearch("http://{}:9200".format(app.config["SEARCH_ELASTIC_HOSTS"]))
+    es = OpenSearch("http://{}:9200".format(app.config["SEARCH_HOSTS"]))
     # print(es.cat.indices())
     return {"indexer": indexer, "results": results}
 
@@ -3087,7 +3068,7 @@ def doi_records(app, db, identifier, indextree, location, db_itemtype, db_oaisch
 
 @pytest.fixture()
 def es_item_file_pipeline(es):
-    from elasticsearch.client.ingest import IngestClient
+    from opensearchpy.client.ingest import IngestClient
 
     p = IngestClient(current_search_client)
     p.put_pipeline(
@@ -3194,6 +3175,7 @@ def record_indexer_receiver(app, json=None, record=None, index=None,
 def es(app):
     """Elasticsearch fixture."""
     try:
+        current_search_client.indices.delete(index="test-*")
         list(current_search.create())
     except RequestError:
         list(current_search.delete(ignore=[404]))
@@ -3233,7 +3215,7 @@ def make_record(db, indexer, i, filepath, filename, mimetype, doi_prefix=None):
         },
         "item_title": "ja_conference paperITEM00000009(public_open_access_open_access_simple)",
         "author_link": ["4"],
-        "item_type_id": "1",
+        "item_type_id": "10",
         "publish_date": "2021-08-06",
         "publish_status": "0",
         "weko_shared_ids": [],
@@ -4213,11 +4195,11 @@ def make_record(db, indexer, i, filepath, filename, mimetype, doi_prefix=None):
         status=PIDStatus.REGISTERED,
     )
 
-    h1 = PIDVersioning(parent=parent)
-    h1.insert_child(child=recid)
-    h1.insert_child(child=recid_v1)
-    RecordDraft.link(recid, depid)
-    RecordDraft.link(recid_v1, depid_v1)
+    h1 = PIDNodeVersioning(pid=parent)
+    h1.insert_child(child_pid=recid)
+    h1.insert_child(child_pid=recid_v1)
+    PIDNodeDraft(pid=recid).insert_child(depid)
+    PIDNodeDraft(pid=recid_v1).insert_child(depid_v1)
 
     if doi_prefix and len(doi_prefix):
         doi = PersistentIdentifier.create(

@@ -21,16 +21,14 @@
 {%- extends admin_base_template %}
 
 {% block css %}
-{{ super() }}
-{% assets "weko_theme_css_buttons" %}
-<link href="{{ ASSET_URL }}" rel="stylesheet">{% endassets %}
+  {{ super() }}
+  {{ webpack['theme-css-buttons.css'] }}
 {% endblock %}
 
 {%- block javascript %}
-{%- include config.WEKO_WORKFLOW_POP_PAGE -%}
-{{ super() }}
-{% assets "flow_detail_admin_js" %}
-<script src="{{ ASSET_URL }}"></script>{% endassets %}
+  {%- include config.WEKO_WORKFLOW_POP_PAGE -%}
+  {{ super() }}
+  {{ webpack['workflow-js-admin-flow-detail.js']}}
 {%- endblock javascript %}
 
 {%- block body %}
@@ -208,10 +206,10 @@
                   {%- endfor %}
                   {%- endif %}
                   <option class="{%- if action.action.action_name == 'Approval' and use_restricted_item %}item-registrant-option{%- else %}hide{%- endif %}"
-                    {% if action.action_role.action_item_registrant%} selected {% endif %} 
-                    value="{{workflow_registrant_id}}">{{_('Item registrant')}}</option>                                    
+                    {% if action.action_role.action_item_registrant%} selected {% endif %}
+                    value="{{workflow_registrant_id}}">{{_('Item registrant')}}</option>
                   <option class="{%- if action.action.action_name == 'Approval' and display_request_form == True%}request-mail-option{%- else %}hide{%- endif %}"
-                    {% if action.action_role.action_request_mail%} selected {% endif %} 
+                    {% if action.action_role.action_request_mail%} selected {% endif %}
                     value="{{workflow_request_mail_id}}">{{_('Request mail')}}</option>
                 </select>
                 <div class="checkbox">
@@ -224,7 +222,7 @@
                 <br>
                 {% if action.action.action_name == 'Approval' and use_restricted_item %}
                 <div>
-                  <button class="btn btn-primary pull-right ten-pixel-top-margin btn_setting_nortification_mail" id="btn_setting_nortification_mail_{{loop.index}}" 
+                  <button class="btn btn-primary pull-right ten-pixel-top-margin btn_setting_nortification_mail" id="btn_setting_nortification_mail_{{loop.index}}"
                     data-old-action-order="{{loop.index}}">{{_('Notification Email Setting')}}</button>
                   <input type="hidden" id="loop_index" value='{{ loop.index }}'>
                   {% include "weko_workflow/admin/mail_setting.html" %}
@@ -326,8 +324,8 @@
             <option value="{{user.id}}">{{user.email}}</option>
             {%- endfor -%}
             <option class="specify-property-option" value="-1">{{_('Specify property')}}</option>
-            <option class="item-registrant-option"  value="{{workflow_registrant_id}}">{{_('Item registrant')}}</option>     
-            <option class="request-mail-option" value="{{workflow_request_mail_id}}">{{_('Request mail')}}</option>     
+            <option class="item-registrant-option"  value="{{workflow_registrant_id}}">{{_('Item registrant')}}</option>
+            <option class="request-mail-option" value="{{workflow_request_mail_id}}">{{_('Request mail')}}</option>
           </select>
           <div class="checkbox">
             <input type="checkbox" class="td_action_user_deny" id="td_action_user_deny_apply_action.id"

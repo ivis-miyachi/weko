@@ -6,7 +6,8 @@ from flask import current_app
 from flask_login import current_user
 from flask_security import login_user
 from flask_security.utils import login_user
-from mock import patch
+from unittest.mock import patch
+from weko_groups.models import Group, Membership
 
 from weko_records_ui.permissions import (
     check_created_id,
@@ -89,7 +90,7 @@ def test_file_permission_factory(app, records, users, db_file_permission, itemty
             assert file_permission_factory(record, fjson={}).can() == False
             mock_permission.assert_called_once_with(record, {})
             mock_permission.reset_mock()
-        
+
         # item_type specified
         with patch("weko_records_ui.permissions.require_api_auth", lambda: lambda f: f), \
             patch("weko_records_ui.permissions.require_oauth_scopes", lambda x: lambda f: f):
@@ -216,15 +217,15 @@ def test_check_file_download_permission(app, records, users, db_file_permission,
              'version_id': 'd73bd9cb-aa9e-4cd0-bf07-c5976d40bdde', 'displaytype': 'preview',
              'is_thumbnail': False, 'future_date_message': '', 'download_preview_message': '', 'size': 2700000.0,
              'mimetype': 'image/jpeg', 'file_order': 0}
-    
-    
+
+
     # 'accessrole=open_no',weko_shared_ids に任意のユーザが登録され、WEKO_ITEMS_UI_PROXY_POSTING が False の状態で、created_by に登録したユーザで実行する。
     record['_deposit']['created_by'] = 2
     with patch("flask_login.utils._get_user", return_value=users[0]["obj"]):
         with patch("flask_security.current_user", return_value=users[0]["obj"]):
             with patch("flask_security.current_user.is_authenticated", return_value=True):
                 assert check_file_download_permission(record, fjson, True) == True
-    
+
     # 'accessrole=open_no',weko_shared_ids に任意のユーザが登録され、WEKO_ITEMS_UI_PROXY_POSTING が False の状態で、weko_shared_ids に登録したユーザで実行する。
     record['_deposit']['created_by'] = -1
     with patch("flask_login.utils._get_user", return_value=users[0]["obj"]):
@@ -239,14 +240,14 @@ def test_check_file_download_permission(app, records, users, db_file_permission,
         with patch("flask_security.current_user", return_value=users[0]["obj"]):
             with patch("flask_security.current_user.is_authenticated", return_value=True):
                 assert check_file_download_permission(record, fjson, True) == True
-    
+
     # 'accessrole=open_no',weko_shared_ids に任意のユーザが登録され、WEKO_ITEMS_UI_PROXY_POSTING が True の状態で、weko_shared_ids に登録したユーザで実行する。
     record['_deposit']['created_by'] = -1
     with patch("flask_login.utils._get_user", return_value=users[0]["obj"]):
         with patch("flask_security.current_user", return_value=users[0]["obj"]):
             with patch("flask_security.current_user.is_authenticated", return_value=True):
                 assert check_file_download_permission(record, fjson, True) == True
-    
+
     with patch("flask_login.utils._get_user", return_value=users[0]["obj"]):
         assert check_file_download_permission(record, fjson, True) == True
 
@@ -304,9 +305,9 @@ def test_check_open_restricted_permission(app, records, users,db_file_permission
 
     with patch("flask_login.utils._get_user", return_value=users[1]["obj"]):
         assert check_open_restricted_permission(record, fjson) == False
-        
-        with patch("weko_records_ui.permissions.__get_file_permission", return_value=data1):  
-            assert check_open_restricted_permission(record, fjson) == False  
+
+        with patch("weko_records_ui.permissions.__get_file_permission", return_value=data1):
+            assert check_open_restricted_permission(record, fjson) == False
 
             mocker.patch("weko_records_ui.permissions.check_permission_period",return_value="test")
             current_app.config.update(WEKO_ADMIN_RESTRICTED_ACCESS_DISPLAY_FLAG = True)
@@ -315,8 +316,8 @@ def test_check_open_restricted_permission(app, records, users,db_file_permission
         current_app.config.update(WEKO_ADMIN_RESTRICTED_ACCESS_DISPLAY_FLAG = False)
 
         with patch("weko_records_ui.permissions.__get_file_permission", return_value=[]):
-            assert check_open_restricted_permission(record, fjson) == False 
-            
+            assert check_open_restricted_permission(record, fjson) == False
+
             current_app.config.update(WEKO_ADMIN_RESTRICTED_ACCESS_DISPLAY_FLAG = True)
             assert check_open_restricted_permission(record, fjson) == False
 # def is_open_restricted(file_data):
@@ -447,6 +448,22 @@ def test_check_user_group_permission(app, records, users,db_file_permission):
 
     with patch("flask_login.utils._get_user", return_value=users[1]["obj"]):
         assert check_user_group_permission(1) == False
+
+        assert check_user_group_permission("invalid") == False
+
+        assert check_user_group_permission("") == False
+
+        a = Group.create(name="admin")
+        g = Group.create(name="test", admins=[a])
+        with app.test_request_context():
+            print(current_user.get_id())
+            m = Membership.create(user=current_user, group=g)
+            assert check_user_group_permission(g.id) == True
+
+
+    with app.test_request_context():
+        with patch("flask_login.current_user.get_id", return_value=""):
+            assert check_user_group_permission(1) == False
 
 
 # def check_publish_status(record):
@@ -878,7 +895,7 @@ def test_check_created_id(app, users, index, status):
             assert check_created_id(record) == False
             current_app.config.update(WEKO_ITEMS_UI_PROXY_POSTING = True)
             assert check_created_id(record) == True
-    
+
 
     record = {
         "_oai": {"id": "oai:weko3.example.org:00000001", "sets": ["1657555088462"]},

@@ -9,9 +9,9 @@
 
 import mimetypes
 import unicodedata
-
+from time import time
 from flask import current_app
-from invenio_files_rest.helpers import chunk_size_or_default, sanitize_mimetype
+from invenio_files_rest.helpers import sanitize_mimetype
 from werkzeug.datastructures import Headers
 from urllib.parse import quote as url_quote
 

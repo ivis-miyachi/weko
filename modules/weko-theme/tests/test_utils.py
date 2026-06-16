@@ -3,7 +3,7 @@ import pytest
 from flask import current_app, make_response, request
 from flask_login import current_user
 from mock import patch, MagicMock
-from elasticsearch_dsl import response, Search
+from invenio_search.engine import dsl
 
 from weko_theme.utils import (
     get_weko_contents,
@@ -67,7 +67,7 @@ def test_has_widget_design(i18n_app, users, client_request_args, communities):
 # .tox/c1/bin/pytest --cov=weko_theme tests/test_utils.py::test_get_init_display_setting -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-theme/.tox/c1/tmp
 def test_get_init_display_setting(i18n_app, users, client_request_args, communities):
     def dummy_response(data):
-        dummy=response.Response(Search(), json.loads(data))
+        dummy=dsl.response.Response(dsl.Search(), json.loads(data))
         return dummy
 
     search_setting = MagicMock()

@@ -26,7 +26,7 @@ import tempfile
 
 import pytest
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_menu import Menu
 from flask_mail import Mail
 from sqlalchemy_utils.functions import create_database, database_exists
@@ -53,7 +53,7 @@ from weko_logging.audit import WekoLoggingUserActivity
 
 from weko_accounts import WekoAccounts, WekoAccountsREST
 from weko_accounts.views import blueprint
-
+os.environ['TIKA_LOG_PATH'] = '/code/modules/weko-admin/tika.log'
 @pytest.yield_fixture()
 def instance_path():
     """Temporary instance path."""
@@ -106,7 +106,7 @@ def base_app(instance_path):
     WekoRecordsUI(app_)
     WekoAdmin(app_)
     WekoUserProfiles(app_)
-    app_.register_blueprint(blueprint)
+    app_.register_blueprint(blueprint, name='weko_accounts_unique')
     WekoAccountsREST(app_)
     WekoSearchUI(app_)
     WekoLoggingUserActivity(app_)

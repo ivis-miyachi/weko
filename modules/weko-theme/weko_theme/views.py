@@ -31,6 +31,7 @@ from invenio_db import db
 from weko_admin.models import SiteInfo
 from weko_admin.utils import get_search_setting
 from weko_records_ui.ipaddr import check_site_license_permission
+from weko_admin.models import AdminSettings
 
 from .utils import MainScreenInitDisplaySetting, get_design_layout, \
     get_weko_contents, has_widget_design
@@ -66,7 +67,6 @@ def index():
         current_app.config['WEKO_THEME_DEFAULT_COMMUNITY'],
         current_i18n.language)
     page = None
-    
 
     return render_template(
         current_app.config['THEME_FRONTPAGE_TEMPLATE'],
@@ -75,6 +75,8 @@ def index():
         render_header_footer=render_header_footer,
         **get_weko_contents(request.args))
 
+def get_language():
+    return current_i18n.language
 
 @blueprint.route('/edit')
 def edit():

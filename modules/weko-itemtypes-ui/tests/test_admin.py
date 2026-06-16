@@ -51,21 +51,23 @@ class TestItemTypeMetaDataView:
         res = client.get(url)
         assert_statuscode_with_role(res,is_permission)
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypeMetaDataView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
-    def test_index(self,client,admin_view,item_type,users,mocker):
+    def test_index(self,client,admin_view,item_type,users):
         login_user_via_session(client=client,email=users[0]["email"])
         url = url_for("itemtypesregister.index",item_type_id=3)
-        mock_render = mocker.patch("weko_itemtypes_ui.admin.ItemTypeMetaDataView.render",return_value=make_response())
-        res = client.get(url)
-        assert res.status_code == 200#
-        itemtype_list_ = [(obj["item_type_name"],obj["item_type_name"].name,obj["item_type"].id,obj["item_type"].harvesting_type,obj["item_type"].is_deleted,obj["item_type"].tag) for obj in item_type]
-        itemtype_list = sorted(itemtype_list_, key=lambda x: x[2])
-        mock_render.assert_called_with(
-            'weko_itemtypes_ui/admin/create_itemtype.html',
-            item_type_list=itemtype_list,
-            id=3,
-            is_sys_admin=True,
-            lang_code="en"
-        )#
+        with patch("weko_itemtypes_ui.admin.ItemTypeMetaDataView.render",return_value=make_response()) as mock_render:
+            res = client.get(url)
+            assert res.status_code == 200#
+            itemtype_list_ = [(obj["item_type_name"],obj["item_type_name"].name,obj["item_type"].id,obj["item_type"].harvesting_type,obj["item_type"].is_deleted,obj["item_type"].tag) for obj in item_type]
+            itemtype_list = sorted(itemtype_list_, key=lambda x: x[2])
+            mock_render.assert_called_with(
+                'weko_itemtypes_ui/admin/create_itemtype.html',
+                item_type_list=itemtype_list,
+                id=3,
+                is_sys_admin=True,
+                lang_code="en",
+                uiFixedProperties=current_app.config['WEKO_ITEMTYPES_UI_FIXED_PROPERTIES'],
+                ui_pubdate_titles=current_app.config['WEKO_ITEMTYPES_UI_PUBDATE_DEFAULT_TITLES']
+            )#
 #     def render_itemtype(self, item_type_id=0):
     @pytest.mark.parametrize("index,is_permission",[
         (0,True),
@@ -237,77 +239,90 @@ class TestItemTypeMetaDataView:
             if is_permission:
                 assert res.status_code == 400
                 result = json.loads(res.data)
-                assert result["msg"] == 'Item type cannot be updated becase import is in progress.'
+                assert result["msg"] == 'Item type cannot be updated because import is in progress.'
             else:
                 assert res.status_code == 403
 
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypeMetaDataView::test_register -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
-    def test_register(self,app,client,db,admin_view,users,item_type,mocker):
+    def test_register(self,app,client,db,admin_view,users, item_type):
         login_user_via_session(client=client,email=users[0]["email"])
         login(app,client,obj=users[0]["obj"])
-        with patch("weko_itemtypes_ui.admin.is_import_running", return_value=None),\
-            patch("weko_workflow.utils.get_cache_data", return_value=False):
-            mocker.patch("weko_records.api.after_record_insert.send")
-            mocker.patch("weko_records.api.before_record_insert.send")
-            url = url_for("itemtypesregister.register")
-            res = client.post(url,headers={"Content-Type":"plain/text"})
-            assert json.loads(res.data)["msg"] == "Header Error"
 
-            data = {
-                "table_row_map":{
-                    "schema":{"object":"test schema"},
-                    "form":["test form"],
-                    "name":"new item type name",
-                }
-            }
-            schema = copy.deepcopy(data["table_row_map"]["schema"])
-            form = copy.deepcopy(data["table_row_map"]["form"])
-            mocker.patch("weko_itemtypes_ui.admin.fix_json_schema",return_value=schema)
-            mocker.patch("weko_itemtypes_ui.admin.update_text_and_textarea",return_value=(schema,form))
+        with patch("weko_records.api.after_record_insert.send"):
+            with patch("weko_records.api.before_record_insert.send"):
+                with patch("weko_workflow.utils.get_cache_data", return_value=False):
 
-            # raise ValueError
-            mocker.patch("weko_itemtypes_ui.admin.update_required_schema_not_exist_in_form",return_value={})
-            res = client.post(url,json=data,headers={"Content-Type":"application/json"})
-            assert res.status_code == 400
-            result = json.loads(res.data)
-            assert result["msg"] == "Failed to register Item type. Schema is in wrong format."
+                    # Content-Type is not 'application/json'
+                    url = url_for("itemtypesregister.register")
+                    res = client.post(url,headers={"Content-Type":"plain/text"})
+                    assert json.loads(res.data)["msg"] == "Header Error"
 
+                    data = {
+                        "table_row_map":{
+                            "schema":{"object":"test schema"},
+                            "form":["test form"],
+                            "name":"new item type name",
+                        }
+                    }
+                    schema = copy.deepcopy(data["table_row_map"]["schema"])
+                    form = copy.deepcopy(data["table_row_map"]["form"])
 
-            flow_define = FlowDefine(id=1,flow_id=uuid.uuid4(),
-                                flow_name='Registration Flow',
-                                flow_user=1)
-            with db.session.begin_nested():
-                db.session.add(flow_define)
-            db.session.commit()
-            workflow = WorkFlow(flows_id=uuid.uuid4(),
-                            flows_name='test workflow01',
-                            itemtype_id=1,
-                            index_tree_id=None,
-                            flow_id=1,
-                            is_deleted=False,
-                            open_restricted=False,
-                            location_id=None,
-                            is_gakuninrdm=False)
-            with db.session.begin_nested():
-                db.session.add(workflow)
-            db.session.commit()
+                    with patch("weko_itemtypes_ui.admin.fix_json_schema",return_value=schema):
+                        with patch("weko_itemtypes_ui.admin.update_text_and_textarea",return_value=(schema,form)):
+                            # schema invalid, raise ValueError
+                            with patch("weko_itemtypes_ui.admin.update_required_schema_not_exist_in_form",return_value={}):
+                                res = client.post(url,json=data,headers={"Content-Type":"application/json"})
+                                assert res.status_code == 400
+                                result = json.loads(res.data)
+                                assert result["msg"] == "Failed to register Item type. Schema is in wrong format."
 
-        with patch("weko_itemtypes_ui.admin.is_import_running", return_value=None),\
-            patch("weko_workflow.utils.get_cache_data", return_value=True):
-            url = url_for("itemtypesregister.register",item_type_id=0)
-            res = client.post(url,json=data,headers={"Content-Type":"application/json"})
-            result = json.loads(res.data)
-            res.status_code == 400
-            assert result["msg"] == "Failed to register Item type. Schema is in wrong format."
+                    flow_define = FlowDefine(id=2,flow_id=uuid.uuid4(),
+                                        flow_name='Registration Flow',
+                                        flow_user=1)
+                    with db.session.begin_nested():
+                        db.session.add(flow_define)
+                    db.session.commit()
+                    workflow = WorkFlow(flows_id=uuid.uuid4(),
+                                    flows_name='test workflow01',
+                                    itemtype_id=2,
+                                    index_tree_id=None,
+                                    flow_id=flow_define.id,
+                                    is_deleted=False,
+                                    open_restricted=False,
+                                    location_id=None,
+                                    is_gakuninrdm=False)
+                    with db.session.begin_nested():
+                        db.session.add(workflow)
+                    db.session.commit()
 
-        with patch("weko_itemtypes_ui.admin.is_import_running", return_value=None),\
-            patch("weko_workflow.utils.get_cache_data", return_value=False):
-            url = url_for("itemtypesregister.register",item_type_id=0)
-            mocker.patch("weko_itemtypes_ui.admin.update_required_schema_not_exist_in_form",return_value=schema)
-            res = client.post(url,json=data,headers={"Content-Type":"application/json"})
-            result = json.loads(res.data)
-            assert result["msg"] == "Successfuly registered Item type."
-            assert result["redirect_url"] == "/admin/itemtypes/8"
+                with patch("weko_workflow.utils.get_cache_data", return_value=True):
+                    # get_cache_data is True
+                    url = url_for("itemtypesregister.register",item_type_id=0)
+                    res = client.post(url,json=data,headers={"Content-Type":"application/json"})
+                    result = json.loads(res.data)
+                    assert res.status_code == 400
+                    assert result["msg"] == "Item type cannot be updated because import is in progress."
+
+                render = item_type[1]["item_type"].render
+                schema = copy.deepcopy(item_type[1]["item_type"].schema)
+                data = {
+                        "table_row_map":{
+                            # "schema":{"object":"test schema"},
+                            "schema": schema,
+                            "form": item_type[1]["item_type"].form,
+                            "name":"new item type name"
+                        },
+                        "meta_list":render["meta_list"],
+                    }
+
+                # success
+                with patch("weko_workflow.utils.get_cache_data", return_value=False):
+                    url = url_for("itemtypesregister.register",item_type_id=item_type[1]["item_type"].id)
+                    with patch("weko_itemtypes_ui.admin.update_required_schema_not_exist_in_form",return_value=schema):
+                        res = client.post(url,json=data,headers={"Content-Type":"application/json"})
+                        result = json.loads(res.data)
+                        assert result["msg"] == "Successfuly registered Item type."
+                        assert result["redirect_url"] == "/admin/itemtypes/2"
 
 #     def restore_itemtype(self, item_type_id=0):
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypeMetaDataView::test_restore_itemtype -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
@@ -349,7 +364,7 @@ class TestItemTypeMetaDataView:
 
 #     def get_property_list(self, property_id=0):
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypeMetaDataView::test_get_property_list -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
-    def test_get_property_list(self,client,admin_view,db,itemtype_props,admin_settings,users,mocker):
+    def test_get_property_list(self,client,admin_view,db,itemtype_props,admin_settings,users):
         login_user_via_session(client=client,email=users[0]["email"])
         url = url_for("itemtypesregister.get_property_list")
         billing_permission = BillingPermission(user_id=1,is_active=True)
@@ -384,7 +399,7 @@ class TestItemTypeMetaDataView:
         }
         assert result == test
         # adminsetting is None
-        mocker.patch("weko_itemtypes_ui.admin.AdminSettings.get",return_value=None)
+        patch("weko_itemtypes_ui.admin.AdminSettings.get",return_value=None)
         res = client.get(url,query_string={"lang":"en"})
         result = json.loads(res.data)
         test = {
@@ -407,6 +422,8 @@ class TestItemTypeMetaDataView:
             "defaults":{"0":{"name":"Date (Type-less)","value":"datetime"}}
         }
         assert result == test
+
+# TODO テスト対象のコードを変えたらテストがパスしたが本当にそれで問題ないのか確認すること。
 #     def export(self,item_type_id):
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypeMetaDataView::test_export -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
     def test_export(
@@ -924,7 +941,7 @@ class TestItemTypePropertiesView():
         assert_statuscode_with_role(res,is_permission)
 
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypePropertiesView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
-    def test_index(self,client,db,admin_view,users,itemtype_props,mocker):
+    def test_index(self,client,db,admin_view,users,itemtype_props):
         login_user_via_session(client,email=users[0]["email"])
         billing_permission = BillingPermission(user_id=1,is_active=False)
         db.session.add(billing_permission)
@@ -1004,10 +1021,10 @@ class TestItemTypePropertiesView():
         res = client.post(url,json={})
         assert_statuscode_with_role(res,is_permission)
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypePropertiesView::test_custom_property_new -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
-    def test_custom_property_new(self,client,admin_view,db,users,mocker):
+    def test_custom_property_new(self,client,admin_view,db,users):
         login_user_via_session(client,email=users[0]["email"])
-        mocker.patch("weko_records.api.before_record_insert.send")
-        mocker.patch("weko_records.api.after_record_insert.send")
+        patch("weko_records.api.before_record_insert.send")
+        patch("weko_records.api.after_record_insert.send")
         url = url_for("itemtypesproperties.custom_property_new")
         data = {
             "name":"new_prop",
@@ -1053,7 +1070,7 @@ class TestItemTypeMappingView:
         res = client.get(url)
         assert_statuscode_with_role(res,is_permission)
 # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypeMappingView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
-    def test_index(self,app,client,admin_view,users,item_type,oaiserver_schema,mocker):
+    def test_index(self,app,client,admin_view,users,item_type,oaiserver_schema):
         login_user_via_session(client,email=users[0]["email"])
         login(app,client,obj=users[0]["obj"])
         url = url_for("itemtypesmapping.index")
@@ -1071,33 +1088,33 @@ class TestItemTypeMappingView:
         )
 
         url = url_for("itemtypesmapping.index",ItemTypeID=7)
-        mock_render = mocker.patch("weko_itemtypes_ui.admin.ItemTypeMappingView.render",return_value=make_response())
-        mocker.patch("weko_itemtypes_ui.admin.remove_xsd_prefix",return_value="called remove_xsd_prefix")
-        res = client.get(url,headers={"Accept-Language":"ja"})
-        mock_render.assert_called_with(
-            "weko_itemtypes_ui/admin/create_mapping.html",
-            lists=[data["item_type_name"] for data in item_type],
-            hide_mapping_prop={},
-            mapping_name="jpcoar_mapping",
-            hide_itemtype_prop={"pubdate": {"type": "string","title": "PubDate","format": "datetime"},"test_not_form":{"title":"test_not_form_title"},"test_key1":{"title":"test_key1_no_title"},"test_key2":{"title":"test_key2_no_title"},"test_key3":{"title":"test_key3_no_title"},"test_key4":{"title":"test_key4_no_title"},"test_key5":{"title":"test_key5_no_title"},"test_key6":{"title":"test_key6_no_title"},"test_key7":{"title":"test_key7_no_title"},"test_key8":{"title":"test_key8_no_title"},"test_key9":{"title":"test_key9_no_title"},"test1_subkey1":{"title":"test1_subkey1_no_title"},"test2_subkey1":{"title":"test2_subkey1_no_title"},"test3_subkey1":{"title":"test3_subkey1_no_title"},"test4_subkey1":{"title":"test4_subkey1_no_title"},"test5_subkey1":{"title":"test5_subkey1_no_title"}},
-            jpcoar_prop_lists="called remove_xsd_prefix",
-            meta_system={
-                "system_identifier_doi":{
-                    "title_i18n":{"en":"system_identifier_doi_en"},
-                    "title":"system_identifier_doi_en"
-                },
-                "system_identifier_hdl":{
-                    "title_i18n":{
-                        "en":"system_identifier_hdl_en",
-                        "ja":"system_identifier_hdl_ja"},
-                    "title":"system_identifier_hdl_ja"
-                }
-            },
-            itemtype_list=[("pubdate","PubDate"),("test_key1","test1_ja"),("test_key2","test_key2_no_title"),("test_key3","test_key3_no_title"),("test_key4","test_key4_title"),("test_key5","test_key5_title"),("test_key6","test_key6_ja"),("test_key7","test_key7_no_title"),("test_key8","test_key8_no_title"),("test_key9","test_key9_title"),("test1_subkey1","test1_subkey1_title"),("test2_subkey1","test2_subkey1_no_title"),("test3_subkey1","test3_subkey1_no_title"),("test4_subkey1","test4.sub1.ja"),("test5_subkey1","test5.sub.title"),("test_not_form","test_not_form_title")],
-            id=7,
-            is_system_admin=True,
-            lang_code="en"
-        )
+        with patch("weko_itemtypes_ui.admin.ItemTypeMappingView.render",return_value=make_response()) as mock_render:
+            with patch("weko_itemtypes_ui.admin.remove_xsd_prefix",return_value="called remove_xsd_prefix"):
+                res = client.get(url,headers={"Accept-Language":"ja"})
+                mock_render.assert_called_with(
+                    "weko_itemtypes_ui/admin/create_mapping.html",
+                    lists=[data["item_type_name"] for data in item_type],
+                    hide_mapping_prop={},
+                    mapping_name="jpcoar_mapping",
+                    hide_itemtype_prop={"pubdate": {"type": "string","title": "PubDate","format": "datetime"},"test_not_form":{"title":"test_not_form_title"},"test_key1":{"title":"test_key1_no_title"},"test_key2":{"title":"test_key2_no_title"},"test_key3":{"title":"test_key3_no_title"},"test_key4":{"title":"test_key4_no_title"},"test_key5":{"title":"test_key5_no_title"},"test_key6":{"title":"test_key6_no_title"},"test_key7":{"title":"test_key7_no_title"},"test_key8":{"title":"test_key8_no_title"},"test_key9":{"title":"test_key9_no_title"},"test1_subkey1":{"title":"test1_subkey1_no_title"},"test2_subkey1":{"title":"test2_subkey1_no_title"},"test3_subkey1":{"title":"test3_subkey1_no_title"},"test4_subkey1":{"title":"test4_subkey1_no_title"},"test5_subkey1":{"title":"test5_subkey1_no_title"}},
+                    jpcoar_prop_lists="called remove_xsd_prefix",
+                    meta_system={
+                        "system_identifier_doi":{
+                            "title_i18n":{"en":"system_identifier_doi_en"},
+                            "title":"system_identifier_doi_en"
+                        },
+                        "system_identifier_hdl":{
+                            "title_i18n":{
+                                "en":"system_identifier_hdl_en",
+                                "ja":"system_identifier_hdl_ja"},
+                            "title":"system_identifier_hdl_ja"
+                        }
+                    },
+                    itemtype_list=[("pubdate","PubDate"),("test_key1","test1_ja"),("test_key2","test_key2_no_title"),("test_key3","test_key3_no_title"),("test_key4","test_key4_title"),("test_key5","test_key5_title"),("test_key6","test_key6_ja"),("test_key7","test_key7_no_title"),("test_key8","test_key8_no_title"),("test_key9","test_key9_title"),("test1_subkey1","test1_subkey1_title"),("test2_subkey1","test2_subkey1_no_title"),("test3_subkey1","test3_subkey1_no_title"),("test4_subkey1","test4.sub1.ja"),("test5_subkey1","test5.sub.title"),("test_not_form","test_not_form_title")],
+                    id=7,
+                    is_system_admin=True,
+                    lang_code="en"
+                )
  # current_app.logger.error("lists:{}".format(lists))
             # # lists:[<ItemTypeName 1>, <ItemTypeName 2>, <ItemTypeName 3>, <ItemTypeName 4>, <ItemTypeName 5>, <ItemTypeName 6>, <ItemTypeName 7>, <ItemTypeName 8>, <ItemTypeName 9>, <ItemTypeName 10>, <ItemTypeName 11>, <ItemTypeName 12>, <ItemTypeName 13>, <ItemTypeName 14>, <ItemTypeName 15>, <ItemTypeName 16>, <ItemTypeName 22>, <ItemTypeName 32>, <ItemTypeName 33>, <ItemTypeName 34>, <ItemTypeName 35>, <ItemTypeName 36>, <ItemTypeName 37>, <ItemTypeName 38>, <ItemTypeName 39>, <ItemTypeName 40>, <ItemTypeName 41>, <ItemTypeName 31001>, <ItemTypeName 31002>, <ItemTypeName 31003>, <ItemTypeName 40001>]#
             # current_app.logger.error("item_type_mapping:{}".format(item_type_mapping['item_1663165432106']))
@@ -1129,7 +1146,7 @@ class TestItemTypeMappingView:
         (5,False),
         (7,False)
     ])
-    def test_mapping_register_acl(self,client,admin_view,users,index,is_permission,mocker):
+    def test_mapping_register_acl(self,client,admin_view,users,index,is_permission):
         login_user_via_session(client,email=users[index]["email"])
         url = url_for("itemtypesmapping.mapping_register")
         res = client.post(url,data="test",headers={"Content-Type":"text/plain"})
@@ -1226,20 +1243,22 @@ class TestItemTypeRocrateMappingView:
         assert_statuscode_with_role(res, is_admin)
 
     # .tox/c1/bin/pytest --cov=weko_itemtypes_ui tests/test_admin.py::TestItemTypeRocrateMappingView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-itemtypes-ui/.tox/c1/tmp
-    def test_index(self, client, admin_view, item_type, users, mocker):
+    def test_index(self, client, admin_view, item_type, users):
         login_user_via_session(client=client, email=users[0]['email'])
 
         # item_type_id is none : redirect first item type
         url = url_for('itemtypesrocratemapping.index')
         res = client.get(url)
         assert res.status_code == 302
-        assert res.headers['Location'] == 'http://test_server/admin/itemtypes/rocrate_mapping/1'
+        # assert res.headers['Location'] == 'http://test_server/admin/itemtypes/rocrate_mapping/1'
+        assert res.headers['Location'] == '/admin/itemtypes/rocrate_mapping/1'
 
         # item_type_id is not exist : redirect first item type
         url100 = url_for('itemtypesrocratemapping.index', item_type_id=100)
         res = client.get(url100)
         assert res.status_code == 302
-        assert res.headers['Location'] == 'http://test_server/admin/itemtypes/rocrate_mapping/1'
+        # assert res.headers['Location'] == 'http://test_server/admin/itemtypes/rocrate_mapping/1'
+        assert res.headers['Location'] == '/admin/itemtypes/rocrate_mapping/1'
 
         # item_type_id is normal : 200
         url1 = url_for('itemtypesrocratemapping.index', item_type_id=1)
@@ -1248,11 +1267,11 @@ class TestItemTypeRocrateMappingView:
 
         # Item type table has no record : render error screen
         with patch('weko_records.api.ItemTypes.get_latest', return_value=[]):
-            mock_render = mocker.patch('weko_itemtypes_ui.admin.ItemTypeRocrateMappingView.render', return_value=make_response())
-            url1 = url_for('itemtypesrocratemapping.index', item_type_id=1)
-            res = client.get(url1)
-            assert res.status_code == 200
-            assert mock_render.call_args[0][0] == current_app.config['WEKO_ITEMTYPES_UI_ADMIN_ERROR_TEMPLATE']
+            with patch('weko_itemtypes_ui.admin.ItemTypeRocrateMappingView.render', return_value=make_response()) as mock_render:
+                url1 = url_for('itemtypesrocratemapping.index', item_type_id=1)
+                res = client.get(url1)
+                assert res.status_code == 200
+                assert mock_render.call_args[0][0] == current_app.config['WEKO_ITEMTYPES_UI_ADMIN_ERROR_TEMPLATE']
 
         # Unexpected error : 500
         with patch('weko_records.api.ItemTypes.get_latest', side_effect=Exception('Unexpected error')):

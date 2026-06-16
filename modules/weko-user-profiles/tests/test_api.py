@@ -78,11 +78,11 @@ def test_get_current_userprofile(req_context,db,users):
 
 # def localize_time(dtime):
 # .tox/c1/bin/pytest --cov=weko_user_profiles tests/test_api.py::test_localize_time -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-user-profiles/.tox/c1/tmp
-def test_localize_time(req_context,db,users,user_profiles,mocker):
+def test_localize_time(req_context,db,users,user_profiles):
     dtime = datetime(2022,10,1,1,2,3,4)
     
     # exist current_userprofile
-    mocker.patch("weko_user_profiles.api._get_current_userprofile",return_value=user_profiles[0])
+    patch("weko_user_profiles.api._get_current_userprofile",return_value=user_profiles[0])
     result = localize_time(dtime)
     assert result == datetime(2022,10,1,10,2,3,4,
                               tzinfo=pytz.timezone('Etc/GMT-9'))
@@ -91,7 +91,7 @@ def test_localize_time(req_context,db,users,user_profiles,mocker):
     current_app.config.update(
         BABEL_DEFAULT_TIMEZONE="Asia/Shanghai"
     )
-    mocker.patch("weko_user_profiles.api._get_current_userprofile",return_value=None)
+    patch("weko_user_profiles.api._get_current_userprofile",return_value=None)
     result = localize_time(dtime)
     
     #assert result == datetime(2022,10,1,)

@@ -25,7 +25,6 @@ from flask_babelex import lazy_gettext as _
 
 from invenio_records_rest.config import RECORDS_REST_ENDPOINTS
 from invenio_search import RecordsSearch
-from invenio_stats.config import SEARCH_INDEX_PREFIX as index_prefix
 
 WEKO_SEARCH_UI_SEARCH_INDEX_API = "/api/index/"
 
@@ -109,7 +108,7 @@ RECORDS_REST_ENDPOINTS["recid"]["search_serializers"] = {
     "application/json": ("weko_records.serializers" ":json_v1_search"),
 }
 
-RECORDS_REST_ENDPOINTS["recid"]["search_index"] = "{}-weko".format(index_prefix)
+RECORDS_REST_ENDPOINTS["recid"]["search_index"] = "weko"
 RECORDS_REST_ENDPOINTS["recid"]["search_type"] = "item-v1.0.0"
 
 # Opensearch endpoint
@@ -140,12 +139,10 @@ RECORDS_REST_ENDPOINTS["worksapce"]["search_serializers"] = {
 
 # RECORDS_REST_ENDPOINTS['recid']['read_permission_factory_imp'] = allow_all
 
-INDEXER_DEFAULT_INDEX = "{}-weko-item-v1.0.0".format(index_prefix)  # Use direct index
-INDEXER_DEFAULT_DOCTYPE = "item-v1.0.0"
-INDEXER_DEFAULT_DOC_TYPE = "item-v1.0.0"
+INDEXER_DEFAULT_INDEX = "weko-item-v1.0.0"  # Use direct index
 INDEXER_FILE_DOC_TYPE = "content"
 
-SEARCH_UI_SEARCH_INDEX = "{}-weko".format(index_prefix)
+SEARCH_UI_SEARCH_INDEX = "weko"
 
 # set item type aggs
 RECORDS_REST_FACETS = dict()
@@ -233,7 +230,6 @@ WEKO_SEARCH_REST_ENDPOINTS = dict(
         pid_fetcher="recid",
         search_class=RecordsSearch,
         search_index=SEARCH_UI_SEARCH_INDEX,
-        search_type="item-v1.0.0",
         search_factory_imp="weko_search_ui.query.weko_search_factory",
         # record_class='',
         record_serializers={
@@ -757,6 +753,8 @@ WEKO_SEARCH_UI_IMPORT_UNUSE_FILES_URI = "import_unuse_files_uri_{}"
 WEKO_SEARCH_UI_BULK_EXPORT_RETRY_INTERVAL = 1
 """ retry interval(sec) """
 
+WEKO_SEARCH_UI_REGEX_MAX_LENGTH = 1000
+
 CELERY_RESULT_PERSISTENT = True
 """ If set to True, result messages will be persistent. This means the messages will not be lost after a broker restart. The default is for the results to be transient."""
 CELERY_TASK_TRACK_STARTED=True
@@ -780,3 +778,7 @@ ROCRATE_METADATA_FILE = "data/ro-crate-metadata.json"
 
 ROCRATE_METADATA_WK_CONTEXT_V1 = "http://purl.org/wk/v1/wk-context.jsonld"
 """ Metadata context file name for RO-Crate+Bagit. """
+
+from .views import search
+
+SEARCH_UI_SEARCH_VIEW = search

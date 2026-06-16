@@ -31,8 +31,8 @@ import unicodedata
 from datetime import datetime, timezone
 
 from flask import abort, current_app, render_template, request, redirect, send_file, url_for, session
-from flask_babelex import gettext as _
-from flask_babelex import get_locale
+from flask_babel import gettext as _
+from flask_babel import get_locale
 from flask_login import current_user
 from flask_security.utils import verify_password
 from invenio_db import db
@@ -51,11 +51,11 @@ from weko_redis.redis import RedisConnection
 from weko_user_profiles.models import UserProfile
 from weko_workflow.utils import is_terms_of_use_only
 from werkzeug.datastructures import Headers
-from werkzeug.urls import url_quote
+from urllib.parse import quote as url_quote
 
 from weko_records_ui.errors import AvailableFilesNotFoundRESTError
 from weko_records_ui.models import (
-    FileOnetimeDownload, FileSecretDownload, PDFCoverPageSettings
+    FileOnetimeDownload, PDFCoverPageSettings
 )
 from weko_records_ui.pdf import make_combined_pdf
 from weko_records_ui.permissions import (
@@ -656,7 +656,7 @@ def process_onetime_file_download(
 def _is_terms_of_use_only(file_obj:dict , req :dict) -> bool:
     """
         return true if the user can apply and apply workflow is terms_of_use_only
-        in case of terms_of_use_only download terms of use is agreed (or terms of use is not setted) 
+        in case of terms_of_use_only download terms of use is agreed (or terms of use is not setted)
     Args
         dict:file_obj :file object
         dict:req :request.args
@@ -785,5 +785,5 @@ def file_list_ui(record, files):
     return send_file(
         export_path + '.zip',
         as_attachment=True,
-        attachment_filename=item_title + '.zip'
+        download_name=item_title + '.zip'
     )

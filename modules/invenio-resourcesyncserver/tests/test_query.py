@@ -5,10 +5,11 @@ import pytest
 import unittest
 import datetime
 from elasticsearch import helpers
-from mock import patch, MagicMock, Mock
+from invenio_search import current_search
+from unittest.mock import patch, MagicMock, Mock
 from flask import current_app, make_response, request
 from flask_login import current_user
-from flask_babelex import Babel
+from flask_babel import Babel
 
 from invenio_resourcesyncserver.query import (
     get_items_by_index_tree,
@@ -68,7 +69,7 @@ def test_item_path_search_factory(i18n_app, indices):
     with patch("weko_index_tree.api.Indexes.get_list_path_publish", return_value="test"):
         with patch("weko_index_tree.api.Indexes.get_child_list", return_value=[MagicMock()]):
             assert item_path_search_factory(data_1, index_id="Root Index")
-    
+
     assert item_path_search_factory(data_1, index_id=33)
 
 

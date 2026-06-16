@@ -27,15 +27,13 @@ import tempfile
 import copy
 import uuid
 from unittest.mock import patch, MagicMock
-from collections import OrderedDict
-from elasticsearch import Elasticsearch
 import time
 from datetime import datetime
 
 import pytest
 from flask import Flask
 from flask_menu import Menu
-from flask_babelex import Babel
+from flask_babel import Babel
 from invenio_accounts import InvenioAccounts
 from invenio_accounts.models import User, Role
 from invenio_access.models import ActionRoles, ActionUsers
@@ -47,6 +45,7 @@ from invenio_assets import InvenioAssets
 from invenio_db import InvenioDB, db as db_
 from invenio_cache import InvenioCache
 from invenio_communities.models import Community
+from weko_authors.models import Authors
 from weko_user_profiles.models import UserProfile
 from invenio_deposit import InvenioDeposit
 from invenio_files_rest import InvenioFilesREST
@@ -64,6 +63,7 @@ from invenio_records import InvenioRecords
 from invenio_records_rest import InvenioRecordsREST
 from invenio_records_rest.utils import PIDConverter
 from invenio_search import InvenioSearch
+from invenio_search.engine import search
 from invenio_search_ui import InvenioSearchUI
 from invenio_stats.config import SEARCH_INDEX_PREFIX as index_prefix
 from six import BytesIO
@@ -73,12 +73,10 @@ from weko_admin import WekoAdmin
 from weko_admin.models import AdminSettings
 from weko_items_ui import WekoItemsUI
 from weko_records import WekoRecords
-
-# from weko_records_ui import WekoRecordsUI
+from weko_redis.redis import RedisConnection
 from weko_search_ui import WekoSearchUI
 from weko_search_ui.config import WEKO_SEARCH_MAX_RESULT
 from weko_index_tree import WekoIndexTree, WekoIndexTreeREST
-
 from weko_theme import WekoTheme
 from weko_groups import WekoGroups
 from invenio_pidrelations.models import PIDRelation
@@ -102,16 +100,16 @@ from weko_deposit.config import (
     WEKO_DEPOSIT_REST_ENDPOINTS as _WEKO_DEPOSIT_REST_ENDPOINTS,
     _PID,
     DEPOSIT_REST_ENDPOINTS as _DEPOSIT_REST_ENDPOINTS,
+    WEKO_MIMETYPE_WHITELIST_FOR_ES as _WEKO_MIMETYPE_WHITELIST_FOR_ES,
+    WEKO_DEPOSIT_BIBLIOGRAPHIC_INFO_SYS_KEY as _WEKO_DEPOSIT_BIBLIOGRAPHIC_INFO_SYS_KEY,
     WEKO_DEPOSIT_TEXTMIMETYPE_WHITELIST_FOR_ES as _WEKO_DEPOSIT_TEXTMIMETYPE_WHITELIST_FOR_ES,
-    WEKO_MIMETYPE_WHITELIST_FOR_ES as _WEKO_MIMETYPE_WHITELIST_FOR_ES
 )
 from weko_index_tree.config import (
     WEKO_INDEX_TREE_REST_ENDPOINTS as _WEKO_INDEX_TREE_REST_ENDPOINTS,
 )
-from weko_logging.audit import WekoLoggingUserActivity
 
 from tests.helpers import json_data, create_record
-
+# from weko_deposit.config import DEPOSIT_RECORDS_API, WEKO_DEPOSIT_ITEMS_CACHE_PREFIX
 
 @pytest.yield_fixture()
 def instance_path():
@@ -127,7 +125,6 @@ def base_app(instance_path):
     app_ = Flask('testapp', instance_path=instance_path)
     app_.url_map.converters["pid"] = PIDConverter
     # initialize InvenioDeposit first in order to detect any invalid dependency
-    # WEKO_DEPOSIT_REST_ENDPOINTS = copy.deepcopy(_DEPOSIT_REST_ENDPOINTS)
     DEPOSIT_REST_ENDPOINTS = copy.deepcopy(_DEPOSIT_REST_ENDPOINTS)
     WEKO_DEPOSIT_REST_ENDPOINTS = copy.deepcopy(_WEKO_DEPOSIT_REST_ENDPOINTS)
     WEKO_DEPOSIT_REST_ENDPOINTS["depid"][
@@ -148,17 +145,14 @@ def base_app(instance_path):
             "CACHE_REDIS_URL", "redis://redis:6379/0"
         ),
         CACHE_REDIS_DB=0,
+        # WEKO_DEPOSIT_ITEMS_CACHE_PREFIX=WEKO_DEPOSIT_ITEMS_CACHE_PREFIX,
         CACHE_REDIS_HOST="redis",
         REDIS_PORT="6379",
         JSONSCHEMAS_URL_SCHEME="http",
         SECRET_KEY="CHANGE_ME",
         SECURITY_PASSWORD_SALT="CHANGE_ME_ALSO",
-        SQLALCHEMY_DATABASE_URI=os.environ.get(
-            'SQLALCHEMY_DATABASE_URI',
-            'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
-        # SQLALCHEMY_DATABASE_URI=os.environ.get(
-        #     "SQLALCHEMY_DATABASE_URI", "sqlite:///test.db"
-        # ),
+        SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
+                                          'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
         SQLALCHEMY_TRACK_MODIFICATIONS=True,
         SQLALCHEMY_ECHO=False,
         TESTING=True,
@@ -189,7 +183,6 @@ def base_app(instance_path):
         WEKO_INDEX_TREE_REST_ENDPOINTS=WEKO_INDEX_TREE_REST_ENDPOINTS,
         I18N_LANGUAGES=[("ja", "Japanese"), ("en", "English"),("da", "Danish")],
         SERVER_NAME="TEST_SERVER",
-        SEARCH_ELASTIC_HOSTS=os.environ.get("SEARCH_ELASTIC_HOSTS", "elasticsearch"),
         SEARCH_INDEX_PREFIX="test-",
         WEKO_SCHEMA_JPCOAR_V1_SCHEMA_NAME=WEKO_SCHEMA_JPCOAR_V1_SCHEMA_NAME,
         WEKO_SCHEMA_DDI_SCHEMA_NAME=WEKO_SCHEMA_DDI_SCHEMA_NAME,
@@ -203,11 +196,29 @@ def base_app(instance_path):
         WEKO_MIMETYPE_WHITELIST_FOR_ES = _WEKO_MIMETYPE_WHITELIST_FOR_ES,
         WEKO_SCHEMA_JPCOAR_V2_SCHEMA_NAME="jpcoar_mapping",
         WEKO_SCHEMA_JPCOAR_V2_RESOURCE_TYPE_REPLACE={
-            "periodical": "journal",
-            "interview": "other",
-            "internal report": "other",
-            "report part": "other",
-            "conference object": "conference output",
+            'periodical':'journal',
+            'interview':'other',
+            'internal report':'other',
+            'report part':'other',
+            'conference object':'conference output',
+        },
+        WEKO_AUTHORS_ES_INDEX_NAME="test-authors",
+        WEKO_AUTHORS_ES_DOC_TYPE="test-authors",
+        WEKO_MIMETYPE_WHITELIST_FOR_ES=_WEKO_MIMETYPE_WHITELIST_FOR_ES,
+        WEKO_DEPOSIT_BIBLIOGRAPHIC_INFO_SYS_KEY=_WEKO_DEPOSIT_BIBLIOGRAPHIC_INFO_SYS_KEY,
+        SEARCH_ELASTIC_HOSTS=os.environ.get(
+            'SEARCH_ELASTIC_HOSTS', 'opensearch'
+        ),
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST', 'opensearch'
+        ),
+        SEARCH_CLIENT_CONFIG = {
+            "http_auth": (
+                os.environ.get('INVENIO_OPENSEARCH_USER'),
+                os.environ.get('INVENIO_OPENSEARCH_PASS')
+            ),
+            "use_ssl": True,
+            "verify_certs": False
         }
     )
     # with ESTestServer(timeout=30) as server:
@@ -224,8 +235,6 @@ def base_app(instance_path):
     InvenioIndexer(app_)
     InvenioPIDStore(app_)
     InvenioRecords(app_)
-    # client = Elasticsearch(['localhost:%s'%server.port])
-    # InvenioSearch(app_, client=client)
     InvenioSearch(app_)
     InvenioSearchUI(app_)
     InvenioPIDRelations(app_)
@@ -233,7 +242,6 @@ def base_app(instance_path):
     InvenioRecordsREST(app_)
     WekoRecords(app_)
     WekoItemsUI(app_)
-    # WekoRecordsUI(app_)
     WekoAdmin(app_)
     WekoSearchUI(app_)
     WekoTheme(app_)
@@ -241,10 +249,7 @@ def base_app(instance_path):
     WekoIndexTree(app_)
     WekoIndexTreeREST(app_)
     Menu(app_)
-    # app_.register_blueprint(blueprint)
     app_.register_blueprint(invenio_files_rest_blueprint)  # invenio_files_rest
-    # rest_blueprint = create_blueprint(app_, WEKO_DEPOSIT_REST_ENDPOINTS)
-    # app_.register_blueprint(rest_blueprint)
     WekoDeposit(app_)
     WekoDepositREST(app_)
     WekoLoggingUserActivity(app_)
@@ -254,9 +259,21 @@ def base_app(instance_path):
 @pytest.yield_fixture()
 def app(base_app):
     """Flask application fixture."""
+    WekoDeposit(base_app)
+    WekoDepositREST(base_app)
+
     with open("tests/data/mappings/item-v1.0.0.json", "r") as f:
         mapping = json.load(f)
-    es = Elasticsearch("http://{}:9200".format(base_app.config["SEARCH_ELASTIC_HOSTS"]))
+
+    search_hosts = base_app.config["SEARCH_ELASTIC_HOSTS"]
+    search_client_config = base_app.config["SEARCH_CLIENT_CONFIG"]
+    es = search.client.OpenSearch(
+        hosts=[{'host': search_hosts, 'port': 9200}],
+        http_auth=search_client_config['http_auth'],
+        use_ssl=search_client_config['use_ssl'],
+        verify_certs=search_client_config['verify_certs'],
+    )
+
     es.indices.create(
         index=base_app.config["INDEXER_DEFAULT_INDEX"], body=mapping, ignore=[400, 404]
     )
@@ -294,13 +311,38 @@ def db(app):
     yield db_
     db_.session.remove()
     db_.drop_all()
-    # drop_database(str(db_.engine.url))
-
 
 @pytest.fixture()
-def records(db):
+def redis_connect(app):
+    redis_connection = RedisConnection().connection(db=app.config['CACHE_REDIS_DB'], kv=True)
+    return redis_connection
+
+@pytest.fixture()
+def records(db, location):
     record_data = json_data("data/test_records.json")
     item_data = json_data("data/test_items.json")
+    record_num = len(record_data)
+    result = []
+    for d in range(record_num):
+        result.append(create_record(record_data[d], item_data[d]))
+    db.session.commit()
+    yield result
+
+@pytest.fixture()
+def records2(db):
+    record_data = json_data("data/test_no_nameIdentifiers.json")
+    item_data = json_data("data/test_items2.json")
+    record_num = len(record_data)
+    result = []
+    for d in range(record_num):
+        result.append(create_record(record_data[d], item_data[d]))
+    db.session.commit()
+    yield result
+
+@pytest.fixture()
+def records3(db):
+    record_data = json_data("data/test_no_creatorNames_contributorNames_names.json")
+    item_data = json_data("data/test_items3.json")
     record_num = len(record_data)
     result = []
     for d in range(record_num):
@@ -326,6 +368,7 @@ def location(app, db):
 
     shutil.rmtree(tmppath)
 
+
 @pytest.fixture()
 def wekofs_testpath(location):
     """Temporary path for WekoFileStorage."""
@@ -342,7 +385,6 @@ def bucket(db, location):
     bucket = Bucket.create(location)
     db.session.commit()
     return bucket
-
 
 @pytest.fixture()
 def testfile(db, bucket):
@@ -491,7 +533,7 @@ def users(app, db):
     index = Index()
     db.session.add(index)
     db.session.commit()
-    comm = Community.create(community_id="test_com", role_id=sysadmin_role.id,
+    Community.create(community_id="test_com", role_id=sysadmin_role.id,
                             id_user=sysadmin.id, title="test community",
                             description=("this is test community"),
                             root_node_id=index.id)
@@ -534,7 +576,7 @@ def deposit(app, location):
 
 
 @pytest.fixture()
-def db_index(client, users):
+def db_index(client,db, users):
     index_metadata = {
         "id": 1,
         "parent": 0,
@@ -590,6 +632,7 @@ def db_index(client, users):
             index = Index.get_index_by_id(4)
             index.public_state = False
             index.harvest_public_state = False
+    db.session.commit()
 
 
 @pytest.fixture()
@@ -642,9 +685,54 @@ def db_itemtype(app, db):
         "item_type_mapping": item_type_mapping,
     }
 
-
 @pytest.fixture()
-def es_records(app, db, location, db_itemtype, db_oaischema):
+def db_itemtype2(app, db):
+    item_type_name = ItemTypeName(
+        id=2, name="テストアイテムタイプ2", has_site_license=True, is_active=True
+    )
+    item_type_schema = dict()
+    with open("tests/data/itemtype_schema.json", "r") as f:
+        item_type_schema = json.load(f)
+
+    item_type_form = dict()
+    with open("tests/data/itemtype_form.json", "r") as f:
+        item_type_form = json.load(f)
+
+    item_type_render = dict()
+    with open("tests/data/itemtype_render2.json", "r") as f:
+        item_type_render = json.load(f)
+
+    item_type_mapping = dict()
+    with open("tests/data/itemtype_mapping.json", "r") as f:
+        item_type_mapping = json.load(f)
+
+    item_type = ItemType(
+        id=2,
+        name_id=2,
+        harvesting_type=True,
+        schema=item_type_schema,
+        form=item_type_form,
+        render=item_type_render,
+        tag=1,
+        version_id=1,
+        is_deleted=False,
+    )
+
+    item_type_mapping = ItemTypeMapping(id=2, item_type_id=2, mapping=item_type_mapping)
+
+    with db.session.begin_nested():
+        db.session.add(item_type_name)
+        db.session.add(item_type)
+        db.session.add(item_type_mapping)
+
+    return {
+        "item_type_name": item_type_name,
+        "item_type": item_type,
+        "item_type_mapping": item_type_mapping,
+    }
+@pytest.fixture()
+def es_records(app, db, db_index, location, db_itemtype,db_oaischema):
+
     indexer = WekoIndexer()
     indexer.get_es_index()
     results = []
@@ -652,29 +740,411 @@ def es_records(app, db, location, db_itemtype, db_oaischema):
     db.session.begin_nested()
 
     with app.test_request_context():
-        def format_number(i, fill_num=None):
-            int_part, decimal_part = divmod(i, 1)
-            if fill_num:
-                int_part_str = str(int(int_part)).zfill(fill_num)
-            else:
-                int_part_str = str(int(int_part))
-            if decimal_part != 0:
-                int_part_str += f".{decimal_part:.10f}".strip('0')
-            return int_part_str
+        for i in range(1, 10):
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]}, "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02","content":[{"test":"content"},{"file":"test"}]}, "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type","content":[{"test":"content"},{"file":"test"}], "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
+            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
 
-        def create_record(i, index_id, no_sets = False):
-            if not no_sets:
-                record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{}".format(format_number(i, 2)), "sets": ["{}".format(index_id)]}, "path": ["{}".format(index_id)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_ids": [], "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True if not "." in str(i) else False, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
-                record_data_0 =  {"_oai": {"id": "oai:weko3.example.org:000000{}.0".format(format_number(i, 2)), "sets": ["{}".format(index_id)]}, "path": ["{}".format(index_id)], "owner": "1", "recid": "{}.0".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}.0".format(i), "pid": {"type": "depid", "value": "{}.0".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_ids": [], "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True if not "." in str(i) else False, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}.0/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
-            else:
-                record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{}".format(format_number(i, 2))}, "path": ["11", "{}".format(index_id)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_ids": [], "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True if not "." in str(i) else False, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
-                record_data_0 =  {"_oai": {"id": "oai:weko3.example.org:000000{}.0".format(format_number(i, 2))}, "path": ["11", "{}".format(index_id)], "owner": "1", "recid": "{}.0".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}.0".format(i), "pid": {"type": "depid", "value": "{}.0".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_ids": [], "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True if not "." in str(i) else False, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}.0/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
-
-            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_ids": [], "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
-            item_data_0 = {"id": "{}.0".format(i), "pid": {"type": "depid", "value": "{}.0".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_ids": [], "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
-   
             rec_uuid = uuid.uuid4()
-            rec_uuid_0 = uuid.uuid4()
+
+            recid = PersistentIdentifier.create('recid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            depid = PersistentIdentifier.create('depid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            rel = PIDRelation.create(recid,depid,1)
+            db.session.add(rel)
+            parent = None
+            doi = None
+            parent = PersistentIdentifier.create('parent', "parent:{}".format(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            rel = PIDRelation.create(parent,recid,0,0)
+            db.session.add(rel)
+            if(i%2==1):
+                doi = PersistentIdentifier.create('doi', "https://doi.org/10.xyz/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+                hdl = PersistentIdentifier.create('hdl', "https://hdl.handle.net/0000/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            # from six import BytesIO
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            bucket = Bucket.create()
+            record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
+            stream = BytesIO(b'Hello, World')
+            record.files['hello.txt'] = stream
+            obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
+            record['item_1617605131499']['attribute_value_mlt'][0]['file'] = (base64.b64encode(stream.getvalue())).decode('utf-8')
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+            record['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
+
+            record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}/files/hello.txt".format(i)},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
+            indexer.upload_metadata(record_data, rec_uuid, 1, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+            results.append({"depid":depid, "recid":recid, "parent": parent, "doi":doi, "hdl": hdl,"record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit, "rec_uuid":rec_uuid, "version_id":obj.version_id})
+
+    time.sleep(3)
+    return indexer, results
+
+
+@pytest.fixture()
+def es_records_1(app, db, db_index, location, db_itemtype,db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+    with app.test_request_context():
+        for i in range(1, 10):
+
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]}, "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}".format(i), "pid": {"type": "recid", "value": "{}".format(i), "revision_id": 2}, "owner": "1", "owners": [1], "status": "outline", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "filename": "hello.txt", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "filename": "hello.txt", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
+
+            rec_uuid = uuid.uuid4()
+
+            recid = PersistentIdentifier.create('recid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.RESERVED)
+            depid = PersistentIdentifier.create('depid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.RESERVED)
+            rel = PIDRelation.create(recid,depid,1)
+            db.session.add(rel)
+            parent = None
+            doi = None
+            parent = PersistentIdentifier.create('parent', "parent:{}".format(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.RESERVED)
+            rel = PIDRelation.create(parent,recid,0,0)
+            db.session.add(rel)
+            if(i%2==1):
+                doi = PersistentIdentifier.create('doi', "https://doi.org/10.xyz/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.RESERVED)
+                hdl = PersistentIdentifier.create('hdl', "https://hdl.handle.net/0000/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.RESERVED)
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            # from six import BytesIO
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            bucket = Bucket.create()
+            record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
+            stream = BytesIO(b'Hello, World')
+            record.files['hello.txt'] = stream
+            obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
+            record['item_1617605131499']['attribute_value_mlt'][0]['file'] = (base64.b64encode(stream.getvalue())).decode('utf-8')
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+            record['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
+
+            record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}/files/hello.txt".format(i)},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
+
+            indexer.upload_metadata(record_data, rec_uuid, 2, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+            results.append({"depid":depid, "recid":recid, "parent": parent, "doi":doi, "hdl": hdl,"record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit, "rec_uuid":rec_uuid})
+
+    time.sleep(3)
+    return indexer, results
+
+
+@pytest.fixture()
+def es_records_2(app, db, db_index, location, db_itemtype2,db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+    with app.test_request_context():
+        for i in range(11, 20):
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]}, "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02","content":[{"test":"content"},{"file":"test"}]}, "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "2", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type","content":[{"test":"content"},{"file":"test"}], "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True,
+            'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]},
+            'item_1662046377046': {'attribute_name': 'thumbnail', 'attribute_type': 'object', 'attribute_value_mlt': [{'subitem_thumbnail': [{'thumbnail_url': 'http://purl.org/coar/resource_type/c_5794'.format(i)}, {'thumbnail_label': 'label'.format(i)}] }]},
+            'item_1617186419668': {'attribute_name': 'Creator', 'attribute_type': 'creator', 'attribute_value_mlt': [{'iscreator':'is'.format(i)},{'givenNames': [{'givenName': "givenNames".format(i)}, {'givenNameLang':"ja"}]},{"familyNames":[{"familyName":"mei"},{"familyNameLang":"ja"}]},{"familyNames":[{"familyName":"mei"},{"familyNameLang":"ja"}]}
+            ,{"creatorMails":[{"creatorMail":"mail"},{"title_i18n_temp":"Email Addresss"}]}
+            ,{"creatorNames":[{"creatorName":"name"},{"creatorNameLang":"ja"}]}
+            ,{"nameIdentifiers":[{"nameIdentifier":"識別"},{"nameIdentifierURI":"tets.com"}]}
+            ,{"affiliationNameIdentifiers":[{"affiliationNameIdentifier":"識別子"},{"affiliationNameIdentifierURI":"tets.com"},{"affiliationNameIdentifierScheme":"kakenhi"}]}
+            ,{"creatorAlternatives":[{"creatorAlternative":"別名"},{"creatorAlternativeLang":"ja"}]}
+            ]},
+            'item_1727609004387': {'attribute_name': 'Bibliographic Information', 'attribute_type': 'object', 'attribute_value_mlt': [
+                {'bibliographicPageEnd':'終了ページ'.format(i)}
+                ,{'bibliographic_titles': [{'bibliographic_title': "タイトル".format(i)}, {'bibliographic_titleLang':"ja"}]}
+                ,{'bibliographicPageStart':'開始ページ'.format(i)}
+            ,{'bibliographicIssueDates': [{'bibliographicIssueDate': "日付".format(i)}, {'bibliographicIssueDateType':"Issued"}]}
+            ,{'bibliographicIssueNumber':'号'.format(i)}
+            ,{'bibliographicNumberOfPages':'ページ数'.format(i)}
+            ]},
+            }
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"},
+            "item_1662046377046": {"subitem_thumbnail": 'https://weko3.example.org/record/{}/files/hello.txt'.format(i), "resourcetype": 'label'.format(i)},
+            "item_1727609004387": {"bibliographicPageEnd": '終了ページ'.format(i), "bibliographic_titles": [{'bibliographic_title': "タイトル".format(i)}, {'bibliographic_titleLang':"ja"}], "bibliographicPageStart": '開始ページ'.format(i), "bibliographicIssueDates": [{"bibliographicIssueDate": "日付".format(i)}, {"bibliographicIssueDateType":"Issued"}], "bibliographicIssueNumber":"号".format(i), "bibliographicNumberOfPages":"ページ数".format(i)},
+            # "item_1617186419668": {"iscreator": 'https://weko3.example.org/record/{}/files/hello.txt'.format(i), "resourcetype": 'label'.format(i)},
+            }
+
+            rec_uuid = uuid.uuid4()
+
+            recid = PersistentIdentifier.create('recid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            depid = PersistentIdentifier.create('depid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            rel = PIDRelation.create(recid,depid,1)
+            db.session.add(rel)
+            parent = None
+            doi = None
+            parent = PersistentIdentifier.create('parent', "parent:{}".format(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            rel = PIDRelation.create(parent,recid,2,0)
+            db.session.add(rel)
+            if(i%2==1):
+                doi = PersistentIdentifier.create('doi', "https://doi.org/10.xyz/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+                hdl = PersistentIdentifier.create('hdl', "https://hdl.handle.net/0000/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            # from six import BytesIO
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            bucket = Bucket.create()
+            record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
+            stream = BytesIO(b'Hello, World')
+            record.files['hello.txt'] = stream
+            obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
+            record['item_1617605131499']['attribute_value_mlt'][0]['file'] = (base64.b64encode(stream.getvalue())).decode('utf-8')
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+            record['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
+            record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}/files/hello.txt".format(i)},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
+            indexer.upload_metadata(record_data, rec_uuid, 1, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+            results.append({"depid":depid, "recid":recid, "parent": parent, "doi":doi, "hdl": hdl,"record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit, "rec_uuid":rec_uuid, "version_id":obj.version_id})
+
+    time.sleep(3)
+    return indexer, results
+
+@pytest.fixture()
+def es_records_3(app, db, db_index, location, db_itemtype,db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+    with app.test_request_context():
+        for i in range(1, 2):
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]}, "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": None}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": None}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': None}}
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "test", "value": 5, "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
+
+            rec_uuid = uuid.uuid4()
+
+            parent = None
+            doi = None
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            # from six import BytesIO
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            bucket = Bucket.create()
+            record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
+            stream = BytesIO(b'Hello, World')
+            record.files['hello.txt'] = stream
+            obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+
+            record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}/files/hello.txt".format(i)},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
+            indexer.upload_metadata(record_data, rec_uuid, 1, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+        parent = PersistentIdentifier.create('parent', "parent:1",object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+        for recid in recids:
+            rel = PIDRelation.create(parent,recid,0,0)
+            db.session.add(rel)
+        db.session.commit()
+
+    time.sleep(3)
+    return indexer, results
+
+
+@pytest.fixture()
+def es_records_4(app, db, db_index, location, db_itemtype,db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+    with app.test_request_context():
+        for i in range(1, 2):
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]}, "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}".format(i), "pid": {"type": "recid", "value": "{}".format(i), "revision_id": 2}, "owner": "1", "owners": [1], "status": "outline", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"test1": "タイトル", "test2": "hello.txt", "test3": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "test", "value": 5, "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
+
+            rec_uuid = uuid.uuid4()
+
+            parent = None
+            doi = None
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            # from six import BytesIO
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            bucket = Bucket.create()
+            record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
+            stream = BytesIO(b'Hello, World')
+            record.files['hello.txt'] = stream
+            obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+            indexer.upload_metadata(record_data, rec_uuid, 1, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+            results.append({"depid":"2", "recid":'1', "parent": parent, "doi":doi, "hdl": "3","record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit})
+
+    time.sleep(3)
+    return indexer, results
+
+
+@pytest.fixture()
+def es_records_5(app, db, db_index, location, db_itemtype,db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+
+    with app.test_request_context():
+        for i in range(21, 30):
+            record_data =  {
+                "_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]},
+                "path": ["{}".format((i % 2) + 1)],
+                "owner": "1",
+                "recid": "{}".format(i),
+                "title": ["title"],
+                "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"},
+                "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02","content":[{"test":"content"},{"file":"test"}]},
+                "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}},
+                "item_title": "title",
+                "author_link": [],
+                "item_type_id": "2",
+                "publish_date": "2022-08-20",
+                "publish_status": "0",
+                "weko_shared_id": -1,
+                "item_1617186331708": {"attribute_name": "Reference", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]},
+                "item_1617258105262": {"attribute_name": "Reference","content":[{"test":"content"},{"file":"test"}], "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]},
+                "relation_version_is_last": True,
+                'item_1617605131499': {'attribute_name': 'Reference', 'attribute_type': 'creator', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]},
+                'item_1662046377046': {'attribute_name': 'thumbnail', 'attribute_type': 'object', 'attribute_value_mlt': []},
+                'item_1617186419668': {
+                    'attribute_name': 'Creator', 'attribute_type': 'creator',
+                    'attribute_value_mlt': [
+                        {'iscreator':'is'.format(i)},{'givenNames': [{'givenName': "givenNames".format(i)}, {'givenNameLang':"ja"}]},{"familyNames":[{"familyName":"mei"},{"familyNameLang":"ja"}]},{"familyNames":[{"familyName":"mei"},{"familyNameLang":"ja"}]},
+                        {"creatorMails":[{"creatorMail":"mail"},{"title_i18n_temp":"Email Addresss"}]},
+                        {"creatorNames":[{"creatorName":"name"},{"creatorNameLang":"ja"}]},
+                        {"nameIdentifiers":[{"nameIdentifier":"識別"},{"nameIdentifierURI":"tets.com"}]},
+                        {"affiliationNameIdentifiers":[{"affiliationNameIdentifier":"識別子"},{"affiliationNameIdentifierURI":"tets.com"},{"affiliationNameIdentifierScheme":"kakenhi"}]},
+                        {"creatorAlternatives":[{"creatorAlternative":"別名"},{"creatorAlternativeLang":"ja"}]}
+                    ]
+                },
+                'item_1727608787134': {'attribute_name': 'Bibliographic Information', 'attribute_type': 'object', 'attribute_value_mlt': [
+                    {'bibliographicPageEnd':'終了ページ'.format(i)},
+                    {'bibliographic_titles': [{'bibliographic_title': "タイトル".format(i)}, {'bibliographic_titleLang':"ja"}]},
+                    {'bibliographicPageStart':'開始ページ'.format(i)},
+                    {'bibliographicIssueDates': [{'bibliographicIssueDate': "日付".format(i)}, {'bibliographicIssueDateType':"Issued"}]},
+                    {'bibliographicIssueNumber':'号'.format(i)},
+                    {'bibliographicNumberOfPages':'ページ数'.format(i)}
+                    ]
+                },
+            }
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"},
+            "item_1662046377046": {"subitem_thumbnail": 'https://weko3.example.org/record/{}/files/hello.txt'.format(i), "resourcetype": 'label'.format(i)},
+            "item_1727609004387": {"bibliographicPageEnd": '終了ページ'.format(i), "bibliographic_titles": [{'bibliographic_title': "タイトル".format(i)}, {'bibliographic_titleLang':"ja"}], "bibliographicPageStart": '開始ページ'.format(i), "bibliographicIssueDates": [{"bibliographicIssueDate": "日付".format(i)}, {"bibliographicIssueDateType":"Issued"}], "bibliographicIssueNumber":"号".format(i), "bibliographicNumberOfPages":"ページ数".format(i)},
+            # "item_1617186419668": {"iscreator": 'https://weko3.example.org/record/{}/files/hello.txt'.format(i), "resourcetype": 'label'.format(i)},
+            }
+
+            rec_uuid = uuid.uuid4()
+
+            recid = PersistentIdentifier.create('recid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            depid = PersistentIdentifier.create('depid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            rel = PIDRelation.create(recid,depid,1)
+            db.session.add(rel)
+            parent = None
+            doi = None
+            parent = PersistentIdentifier.create('parent', "parent:{}".format(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            rel = PIDRelation.create(parent,recid,0,0)
+            db.session.add(rel)
+            if(i%2==1):
+                doi = PersistentIdentifier.create('doi', "https://doi.org/10.xyz/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+                hdl = PersistentIdentifier.create('hdl', "https://hdl.handle.net/0000/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            # from six import BytesIO
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            bucket = Bucket.create()
+            record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
+            stream = BytesIO(b'Hello, World')
+            record.files['hello.txt'] = stream
+            obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
+            record['item_1617605131499']['attribute_value_mlt'][0]['file'] = (base64.b64encode(stream.getvalue())).decode('utf-8')
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+            record['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
+
+            record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}/files/hello.txt".format(i)},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
+            indexer.upload_metadata(record_data, rec_uuid, 1, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+            results.append({"depid":depid, "recid":recid, "parent": parent, "doi":doi, "hdl": hdl,"record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit, "rec_uuid":rec_uuid, "version_id":obj.version_id})
+
+    time.sleep(3)
+    return indexer, results
+
+
+@pytest.fixture()
+def es_records_6(app, db, db_index, location, db_itemtype2, db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+    with app.test_request_context():
+        for i in range(31, 40):
+            record_data =  {
+                "_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]},
+                "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"],
+                "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"},
+                "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02","content":[{"test":"content"},{"file":"test"}]},
+                "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}},
+                "item_title": "title", "author_link": [], "item_type_id": "2", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1,
+                "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]},
+                "item_1617258105262": {"attribute_name": "Resource Type","content":[{"test":"content"},{"file":"test"}], "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True,
+                'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]},"item_1617258105262": {"attribute_name": "Reference","attribute_type": "file" ,"content":[{"test":"content"},{"file":"test"}]},
+                'item_1662046377046': {'attribute_name': 'thumbnail', 'attribute_type': 'object', 'attribute_value_mlt': [{'subitem_thumbnail': [{'thumbnail_url': 'http://purl.org/coar/resource_type/c_5794'.format(i)}, {'thumbnail_label': 'label'.format(i)}] }]},
+                'item_1617186419668': {
+                    'attribute_name': 'Creator', 'attribute_type': 'creator',
+                    'attribute_value_mlt': [
+                        {'iscreator':'is'.format(i)},{'givenNames': [{'givenName': "givenNames".format(i)}, {'givenNameLang':"ja"}]},{"familyNames":[{"familyName":"mei"},{"familyNameLang":"ja"}]},
+                        {"familyNames":[{"familyName":"mei"},{"familyNameLang":"ja"}]},{"creatorMails":[{"creatorMail":"mail"},{"title_i18n_temp":"Email Addresss"}]}, {"creatorNames":[{"creatorName":"name"},{"creatorNameLang":"ja"}]}, {"nameIdentifiers":[{"nameIdentifier":"識別"},{"nameIdentifierURI":"tets.com"}]},
+                        {"affiliationNameIdentifiers":[{"affiliationNameIdentifier":"識別子"},{"affiliationNameIdentifierURI":"tets.com"},{"affiliationNameIdentifierScheme":"kakenhi"}]},
+                        {"creatorAlternatives":[{"creatorAlternative":"別名"},{"creatorAlternativeLang":"ja"}]}
+                    ]},
+                'item_1617187056579': {
+                    'attribute_name': 'Bibliographic Information', 'attribute_type': 'object',
+                    'attribute_value_mlt': [
+                        {'bibliographicPageEnd':'終了ページ'.format(i)},{'bibliographic_titles': [{'bibliographic_title': "タイトル".format(i)}, {'bibliographic_titleLang':"ja"}]},{'bibliographicPageStart':'開始ページ'.format(i)},
+                        {'bibliographicIssueDates': [{'bibliographicIssueDate': "日付".format(i)}, {'bibliographicIssueDateType':"Issued"}]},{'bibliographicIssueNumber':'号'.format(i)},{'bibliographicNumberOfPages':'ページ数'.format(i)}
+                    ]},
+                'item_1727608787134': {'attribute_name': 'Bibliographic Information', 'attribute_type': 'object',
+                    'attribute_value_mlt': [
+                        {'bibliographicPageEnd':'終了ページ'.format(i)},
+                        {'bibliographic_titles': [{'bibliographic_title': "タイトル".format(i)}, {'bibliographic_titleLang':"ja"}]},
+                        {'bibliographicPageStart':'開始ページ'.format(i)},
+                        {'bibliographicIssueDates': [{'bibliographicIssueDate': "日付".format(i)}, {'bibliographicIssueDateType':"Issued"}]},
+                        {'bibliographicIssueNumber':'号'.format(i)},
+                        {'bibliographicNumberOfPages':'ページ数'.format(i)}
+                    ]
+                },
+                'item_1727608787136': {
+                    'attribute_name': 'Bibliographic Information', 'attribute_type': 'object',
+                    'attribute_value_mlt': [{'interim': 'test'}, {'format': 'plain/text'}, {'filename': 'hello.txt'}]},
+                'item_1727608787199': {'attribute_name': 'Information', 'attribute_type': 'object', 'attribute_value': '2022-08-20'},
+                'item_1727608788054': {'attribute_name': 'Information', 'attribute_type': 'nothing'},
+            }
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"},
+            "item_1662046377046": {"subitem_thumbnail": 'https://weko3.example.org/record/{}/files/hello.txt'.format(i), "resourcetype": 'label'.format(i)},
+            "item_1727609004387": {"bibliographicPageEnd": '終了ページ'.format(i), "bibliographic_titles": [{'bibliographic_title': "タイトル".format(i)}, {'bibliographic_titleLang':"ja"}], "bibliographicPageStart": '開始ページ'.format(i), "bibliographicIssueDates": [{"bibliographicIssueDate": "日付".format(i)}, {"bibliographicIssueDateType":"Issued"}], "bibliographicIssueNumber":"号".format(i), "bibliographicNumberOfPages":"ページ数".format(i)},
+            # "item_1617186419668": {"iscreator": 'https://weko3.example.org/record/{}/files/hello.txt'.format(i), "resourcetype": 'label'.format(i)},
+            }
+
+            rec_uuid = uuid.uuid4()
 
             recid = PersistentIdentifier.create('recid', str(i), object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
             depid = PersistentIdentifier.create('depid', str(i), object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
@@ -699,11 +1169,10 @@ def es_records(app, db, location, db_itemtype, db_oaischema):
             db.session.add(rel)
             db.session.add(rel_0)
             if(i%2==1):
-                doi = PersistentIdentifier.create('doi', "https://doi.org/10.xyz/{}".format(format_number(i, 10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
-                hdl = PersistentIdentifier.create('hdl', "https://hdl.handle.net/0000/{}".format(format_number(i, 10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+                doi = PersistentIdentifier.create('doi', "https://doi.org/10.xyz/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+                hdl = PersistentIdentifier.create('hdl', "https://hdl.handle.net/0000/{}".format((str(i)).zfill(10)),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
 
-            record = WekoRecord.create(record_data, id_=rec_uuid, recid=recid)
-            record_0 = WekoRecord.create(record_data_0, id_=rec_uuid_0, recid=recid_0)
+            record = WekoRecord.create(record_data, id_=rec_uuid)
             # from six import BytesIO
             from invenio_files_rest.models import Bucket
             from invenio_records_files.models import RecordsBuckets
@@ -723,83 +1192,129 @@ def es_records(app, db, location, db_itemtype, db_oaischema):
             deposit_0.commit()
 
             record['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
-            record_0['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
 
             record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}/files/hello.txt".format(i)},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
             record_data_0['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}.0/files/hello.txt".format(i)},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
             indexer.upload_metadata(record_data, rec_uuid, 1, False)
             indexer.upload_metadata(record_data_0, rec_uuid_0, 1, False)
             item = ItemsMetadata.create(item_data, id_=rec_uuid)
-            item_0 = ItemsMetadata.create(item_data_0, id_=rec_uuid_0)
 
-            results.append({"depid":depid, "recid":recid, "parent": parent, "doi":doi, "hdl": hdl,"record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit})
-            results.append({"depid":depid_0, "recid":recid_0, "parent": parent, "doi":doi, "hdl": hdl,"record":record_0, "record_data":record_data_0,"item":item_0 , "item_data":item_data_0,"deposit": deposit_0})
-
-        for i in range(1, 10):
-            create_record(i, (i % 2) + 1)
-        create_record(10, 4)
-        create_record(10.1, 3)
-        create_record(10.2, 4)
-        create_record(11, 5, True)
+            results.append({"depid":depid, "recid":recid, "parent": parent, "doi":doi, "hdl": hdl,"record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit, "rec_uuid":rec_uuid, "version_id":obj.version_id})
 
     time.sleep(3)
-    # es = Elasticsearch("http://{}:9200".format(app.config["SEARCH_ELASTIC_HOSTS"]))
-    # print(es.cat.indices())
-
-    db.session.commit()
-    db.session.expunge_all()
-    
     return indexer, results
 
+
 @pytest.fixture()
-def es_records_1(app, db, db_index, location, db_itemtype, db_oaischema):
+def es_records_7(app, db, db_index, location, db_itemtype,db_oaischema):
 
     indexer = WekoIndexer()
     indexer.get_es_index()
-    result = None
+    results = []
     with app.test_request_context():
-        record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(0), "sets": ["1"]}, "path": ["1"], "owner": "1", "recid": "1", "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "1", "pid": {"type": "depid", "value": "1", "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_ids": [1,2,3], "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/1/files/hello.txt'}, 'date': [{'dateType': 'Available', 'dateValue': '2023-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
+        for i in range(1, 2):
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]}, "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}".format(i), "pid": {"type": "recid", "value": "{}".format(i), "revision_id": 2}, "owner": "1", "owners": [1], "status": "outline", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"test1": "タイトル", "test2": "hello.txt", "test3": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
 
-        item_data = {"id": "0", "pid": {"type": "depid", "value": "0", "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_ids": [{"user":1},{"user":2},{"user":3}], "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
+            item_data = {"id": "{}".format(i), "pid": {"type": "test", "value": 5, "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
 
-        rec_uuid = uuid.uuid4()
+            rec_uuid = uuid.uuid4()
 
-        recid = PersistentIdentifier.create('recid', "1", object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
-        depid = PersistentIdentifier.create('depid', "1", object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
-        rel = PIDRelation.create(recid,depid,3)
-        db.session.add(rel)
-        db.session.commit()
-        parent = None
-        doi = None
-        parent = PersistentIdentifier.create('parent', "parent:0",object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
-        rel = PIDRelation.create(parent,recid,2,0)
-        db.session.add(rel)
-        
-        record = WekoRecord.create(record_data, id_=rec_uuid)
-        # from six import BytesIO
-        from invenio_files_rest.models import Bucket
-        from invenio_records_files.models import RecordsBuckets
-        import base64
-        bucket = Bucket.create()
-        record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
-        stream = BytesIO(b'Hello, World')
-        record.files['hello.txt'] = stream
-        obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
-        record['item_1617605131499']['attribute_value_mlt'][0]['file'] = (base64.b64encode(stream.getvalue())).decode('utf-8')
-        deposit = aWekoDeposit(record, record.model)
-        deposit.commit()
-        record['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
-        
-        record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/0/files/hello.txt"},"file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
-        indexer.upload_metadata(record_data, rec_uuid, 1, False)
-        item = ItemsMetadata.create(item_data, id_=rec_uuid)
-        
-        result = {"depid":depid, "recid":recid, "parent": parent, "doi":doi, "record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit}
+            parent = None
+            doi = None
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            # from six import BytesIO
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            bucket = Bucket.create()
+            record_buckets = RecordsBuckets.create(record=record.model, bucket=bucket)
+            stream = BytesIO(b'Hello, World')
+            record.files['hello.txt'] = stream
+            obj=ObjectVersion.create(bucket=bucket.id, key='hello.txt',stream=stream)
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+
+            record_data['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],"accessrole":"open_access","displaytype" : "simple","filename" : "hello.txt","attachment" : {},"format" : "text/plain","mimetype" : "text/plain","filesize" : [{"value" : "1 KB"}],"version_id" : "{}".format(obj.version_id),"url" : {"url":"http://localhost/record/{}/files/hello.txt".format(i)}}]
+            indexer.upload_metadata(record_data, rec_uuid, 1, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+            results.append({"depid":"2", "recid":'1', "parent": parent, "doi":doi, "hdl": "3","record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit})
 
     time.sleep(3)
-    db.session.commit()
-    
-    return indexer, result
+    return indexer, results
+
+
+@pytest.fixture()
+def es_records_8(app, db, db_index, location, db_itemtype,db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+    with app.test_request_context():
+        for i in range(1, 10):
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{:02d}".format(i), "sets": ["{}".format((i % 2) + 1)]}, "path": ["{}".format((i % 2) + 1)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02","content":[{"test":"content"},{"file":"test"}]}, "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type","content":[{"test":"content"},{"file":"test"}], "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
+
+            rec_uuid = None
+            parent = None
+            doi = None
+            hdl = None
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            from invenio_files_rest.models import Bucket
+            from invenio_records_files.models import RecordsBuckets
+            import base64
+            deposit = aWekoDeposit(record, record.model)
+            deposit.commit()
+            indexer.upload_metadata(record_data, rec_uuid, 1, False)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+
+            results.append({"depid":'1', "recid":'1', "parent": parent, "doi":doi, "hdl": hdl,"record":record, "record_data":record_data,"item":item , "item_data":item_data,"deposit": deposit, "rec_uuid":rec_uuid})
+
+    time.sleep(3)
+    return indexer, results
+
+@pytest.fixture()
+def es_records_with_draft(app, db, db_index, location, db_itemtype,db_oaischema):
+
+    indexer = WekoIndexer()
+    indexer.get_es_index()
+    results = []
+    with app.test_request_context():
+        results = []
+        recids = []
+
+        for i in ["1","1.0"]:
+            record_data =  {"_oai": {"id": "oai:weko3.example.org:000000{}".format(i), "sets": ["{}".format(i)]}, "path": ["{}".format(i)], "owner": "1", "recid": "{}".format(i), "title": ["title"], "pubdate": {"attribute_name": "PubDate", "attribute_value": "2022-08-20"}, "_buckets": {"deposit": "3e99cfca-098b-42ed-b8a0-20ddd09b3e02"}, "_deposit": {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "owner": "1", "owners": [1], "status": "draft", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}}, "item_title": "title", "author_link": [], "item_type_id": "1", "publish_date": "2022-08-20", "publish_status": "0", "weko_shared_id": -1, "item_1617186331708": {"attribute_name": "Title", "attribute_value_mlt": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}]}, "item_1617258105262": {"attribute_name": "Resource Type", "attribute_value_mlt": [{"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}]}, "relation_version_is_last": True, 'item_1617605131499': {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': [{'url': {'url': 'https://weko3.example.org/record/{}/files/hello.txt'.format(i)}, 'date': [{'dateType': 'Available', 'dateValue': '2022-09-07'}], 'format': 'plain/text', 'filename': 'hello.txt', 'filesize': [{'value': '146 KB'}], 'accessrole': 'open_access', 'version_id': '', 'mimetype': 'application/pdf',"file": "",}]}}
+
+            item_data = {"id": "{}".format(i), "pid": {"type": "depid", "value": "{}".format(i), "revision_id": 0}, "lang": "ja", "owner": "1", "title": "title", "owners": [1], "status": "published", "$schema": "/items/jsonschema/1", "pubdate": "2022-08-20", "created_by": 1, "owners_ext": {"email": "wekosoftware@nii.ac.jp", "username": "", "displayname": ""}, "shared_user_id": -1, "item_1617186331708": [{"subitem_1551255647225": "タイトル", "subitem_1551255648112": "ja"},{"subitem_1551255647225": "title", "subitem_1551255648112": "en"}], "item_1617258105262": {"resourceuri": "http://purl.org/coar/resource_type/c_5794", "resourcetype": "conference paper"}}
+
+            rec_uuid = uuid.uuid4()
+
+            recid = PersistentIdentifier.create('recid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            depid = PersistentIdentifier.create('depid', str(i),object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+            rel = PIDRelation.create(recid,depid,3)
+            db.session.add(rel)
+            db.session.commit()
+            recids.append(recid)
+
+            record = WekoRecord.create(record_data, id_=rec_uuid)
+            deposit = aWekoDeposit(record, record.model)
+            item = ItemsMetadata.create(item_data, id_=rec_uuid)
+            deposit.commit()
+            results.append({"recid":recid,"record":record,"deposit":deposit})
+
+
+        parent = PersistentIdentifier.create('parent', "parent:1",object_type='rec', object_uuid=rec_uuid,status=PIDStatus.REGISTERED)
+        for recid in recids:
+            rel = PIDRelation.create(parent,recid,2,0)
+            db.session.add(rel)
+        db.session.commit()
+
+    time.sleep(3)
+    return results
 
 @pytest.fixture()
 def db_oaischema(app, db):
@@ -847,6 +1362,43 @@ def db_oaischema(app, db):
     with db.session.begin_nested():
         db.session.add(jpcoar_mapping)
         db.session.add(jpcoar_v1_mapping)
+
+from invenio_search import current_search_client
+@pytest.fixture()
+def esindex(app):
+    current_search_client.indices.delete(index='test-*', ignore=[400, 404])
+    with open("tests/mock_module/mapping/os-v2/authors/test_authors.json","r") as f:
+        mapping = json.load(f)
+    with app.test_request_context():
+        current_search_client.indices.create(app.config["WEKO_AUTHORS_ES_INDEX_NAME"],body=mapping)
+
+
+    yield current_search_client
+
+
+@pytest.fixture()
+def authors(app,db,esindex):
+    datas = json_data("data/author.json")
+    returns = []
+    for data in datas:
+        returns.append(Authors(
+            gather_flg=0,
+            is_deleted=False,
+            json=data
+        ))
+        es_id = data["id"]
+        es_data = json.loads(json.dumps(data))
+        es_data["id"]=""
+        current_search_client.index(
+            index=app.config["WEKO_AUTHORS_ES_INDEX_NAME"],
+            id=es_id,
+            body=es_data,
+            refresh='true')
+
+    db.session.add_all(returns)
+    db.session.commit()
+    return returns
+
 
 @pytest.fixture()
 def prepare_key_map():
@@ -934,13 +1486,299 @@ def prepare_key_map():
 
 @pytest.fixture()
 def prepare_formatsysbib():
-    meta=[{'bibliographicPageEnd': '100', 'bibliographic_titles': [{'bibliographic_title': '雑誌タイトル', 'bibliographic_titleLang': 'ja'},{'bibliographic_title': 'Journal Title', 'bibliographic_titleLang': 'en'}], 'bibliographicPageStart': '1', 'bibliographicIssueDates': {'bibliographicIssueDate': '2022-08-29', 'bibliographicIssueDateType': 'Issued'}, 'bibliographicIssueNumber': '12', 'bibliographicVolumeNumber': '1', 'bibliographicNumberOfPages': '99'}]
-    props = [['pubdate', 'PubDate', 'PubDate', {'required': True, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186331708', 'Title', 'Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186331708[].subitem_1551255647225', 'Title', 'Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186331708[].subitem_1551255648112', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186385884', 'Alternative Title', 'Alternative Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186385884[].subitem_1551255720400', 'Alternative Title', 'Alternative Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186385884[].subitem_1551255721061', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668', 'Creator', 'Creator', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].authorInputButton', '著者DBから入力', '著者DBから入力', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].nameIdentifiers', '作成者識別子', 'Creator Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].nameIdentifiers[].nameIdentifierScheme', '作成者識別子Scheme', 'Creator Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].nameIdentifiers[].nameIdentifierURI', '作成者識別子URI', 'Creator Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].nameIdentifiers[].nameIdentifier', '作成者識別子', 'Creator Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorNames', '作成者姓名', 'Creator Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorNames[].creatorName', '姓名', 'Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorNames[].creatorNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].familyNames', '作成者姓', 'Creator Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].familyNames[].familyName', '姓', 'Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].familyNames[].familyNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].givenNames', '作成者名', 'Creator Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].givenNames[].givenName', '名', 'Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].givenNames[].givenNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAlternatives', '作成者別名', 'Creator Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAlternatives[].creatorAlternative', '別名', 'Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAlternatives[].creatorAlternativeLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorMails', '作成者メールアドレス', 'Creator Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorMails[].creatorMail', 'メールアドレス', 'Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations', '作成者所属', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers[].affiliationNameIdentifier', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers[].affiliationNameIdentifierScheme', '所属機関識別子スキーマ', 'Affiliation Name Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers[].affiliationNameIdentifierURI', '所属機関識別子URI', 'Affiliation Name Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations[].affiliationNames', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations[].affiliationNames[].affiliationName', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186419668[].creatorAffiliations[].affiliationNames[].affiliationNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064', 'Contributor', 'Contributor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorType', '寄与者タイプ', 'Contributor Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].nameIdentifiers', '寄与者識別子', 'Contributor Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].nameIdentifiers[].nameIdentifierScheme', '寄与者識別子Scheme', 'Contributor Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].nameIdentifiers[].nameIdentifierURI', '寄与者識別子URI', 'Contributor Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].nameIdentifiers[].nameIdentifier', '寄与者識別子', 'Contributor Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorNames', '寄与者姓名', 'Contributor Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorNames[].contributorName', '姓名', 'Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorNames[].lang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].familyNames', '寄与者姓', 'Contributor Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].familyNames[].familyName', '姓', 'Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].familyNames[].familyNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].givenNames', '寄与者名', 'Contributor Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].givenNames[].givenName', '名', 'Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].givenNames[].givenNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAlternatives', '寄与者別名', 'Contributor Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAlternatives[].contributorAlternative', '別名', 'Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAlternatives[].contributorAlternativeLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations', '寄与者所属', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers[].contributorAffiliationNameIdentifier', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers[].contributorAffiliationScheme', '所属機関識別子スキーマ', 'Affiliation Name Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers[].contributorAffiliationURI', '所属機関識別子URI', 'Affiliation Name Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNames', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNames[].contributorAffiliationName', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNames[].contributorAffiliationNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorMails', '寄与者メールアドレス', 'Contributor Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].contributorMails[].contributorMail', 'メールアドレス', 'Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349709064[].authorInputButton', '著者DBから入力', '著者DBから入力', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186476635', 'Access Rights', 'Access Rights', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186476635.subitem_1522299639480', 'アクセス権', 'Access Rights', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186476635.subitem_1600958577026', 'アクセス権URI', 'Access Rights URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617351524846', 'APC', 'APC', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617351524846.subitem_1523260933860', 'APC', 'APC', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186499011', 'Rights', 'Rights', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186499011[].subitem_1522650717957', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186499011[].subitem_1522650727486', '権利情報Resource', 'Rights Information Resource', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186499011[].subitem_1522651041219', '権利情報', 'Rights Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286', 'Rights Holder', 'Rights Holder', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286[].nameIdentifiers', '権利者識別子', 'Right Holder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286[].nameIdentifiers[].nameIdentifierScheme', '権利者識別子Scheme', 'Right Holder Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286[].nameIdentifiers[].nameIdentifierURI', '権利者識別子URI', 'Right Holder Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286[].nameIdentifiers[].nameIdentifier', '権利者識別子', 'Right Holder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286[].rightHolderNames', '権利者名', 'Right Holder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286[].rightHolderNames[].rightHolderLanguage', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617610673286[].rightHolderNames[].rightHolderName', '権利者名', 'Right Holder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186609386', 'Subject', 'Subject', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186609386[].subitem_1522299896455', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186609386[].subitem_1522300014469', '主題Scheme', 'Subject Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186609386[].subitem_1522300048512', '主題URI', 'Subject URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186609386[].subitem_1523261968819', '主題', 'Subject', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186626617', 'Description', 'Description', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186626617[].subitem_description_type', '内容記述タイプ', 'Description Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186626617[].subitem_description', '内容記述', 'Description', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186626617[].subitem_description_language', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186643794', 'Publisher', 'Publisher', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186643794[].subitem_1522300295150', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186643794[].subitem_1522300316516', '出版者', 'Publisher', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186660861', 'Date', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186660861[].subitem_1522300695726', '日付タイプ', 'Date Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186660861[].subitem_1522300722591', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186702042', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186702042[].subitem_1551255818386', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617258105262', 'Resource Type', 'Resource Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617258105262.resourcetype', '資源タイプ', 'Resource Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617258105262.resourceuri', '資源タイプ識別子', 'Resource Type Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349808926', 'Version', 'Version', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617349808926.subitem_1523263171732', 'バージョン情報', 'Version', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617265215918', 'Version Type', 'Version Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617265215918.subitem_1522305645492', '出版タイプ', 'Version Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617265215918.subitem_1600292170262', '出版タイプResource', 'Version Type Resource', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186783814', 'Identifier', 'Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186783814[].subitem_identifier_uri', '識別子', 'Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186783814[].subitem_identifier_type', '識別子タイプ', 'Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186819068', 'Identifier Registration', 'Identifier Registration', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186819068.subitem_identifier_reg_text', 'ID登録', 'Identifier Registration', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186819068.subitem_identifier_reg_type', 'ID登録タイプ', 'Identifier Registration Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429', 'Relation', 'Relation', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429[].subitem_1522306207484', '関連タイプ', 'Relation Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429[].subitem_1522306287251', '関連識別子', 'Relation Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429[].subitem_1522306287251.subitem_1522306382014', '識別子タイプ', 'Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429[].subitem_1522306287251.subitem_1522306436033', '関連識別子', 'Relation Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429[].subitem_1523320863692', '関連名称', 'Related Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429[].subitem_1523320863692[].subitem_1523320867455', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617353299429[].subitem_1523320863692[].subitem_1523320909613', '関連名称', 'Related Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186859717', 'Temporal', 'Temporal', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186859717[].subitem_1522658018441', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186859717[].subitem_1522658031721', '時間的範囲', 'Temporal', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738', 'Geo Location', 'Geo Location', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_point', '位置情報（点）', 'Geo Location Point', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_point.subitem_point_longitude', '経度', 'Point Longitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_point.subitem_point_latitude', '緯度', 'Point Latitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_box', '位置情報（空間）', 'Geo Location Box', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_box.subitem_west_longitude', '西部経度', 'West Bound Longitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_box.subitem_east_longitude', '東部経度', 'East Bound Longitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_box.subitem_south_latitude', '南部緯度', 'South Bound Latitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_box.subitem_north_latitude', '北部緯度', 'North Bound Latitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_place', '位置情報（自由記述）', 'Geo Location Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186882738[].subitem_geolocation_place[].subitem_geolocation_place_text', '位置情報（自由記述）', 'Geo Location Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218', 'Funding Reference', 'Funding Reference', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399143519', '助成機関識別子', 'Funder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399143519.subitem_1522399281603', '助成機関識別子タイプ', 'Funder Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399143519.subitem_1522399333375', '助成機関識別子', 'Funder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399412622', '助成機関名', 'Funder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399412622[].subitem_1522399416691', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399412622[].subitem_1522737543681', '助成機関名', 'Funder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399571623', '研究課題番号', 'Award Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399571623.subitem_1522399585738', '研究課題URI', 'Award URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399571623.subitem_1522399628911', '研究課題番号', 'Award Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399651758', '研究課題名', 'Award Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399651758[].subitem_1522721910626', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186901218[].subitem_1522399651758[].subitem_1522721929892', '研究課題名', 'Award Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186920753', 'Source Identifier', 'Source Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186920753[].subitem_1522646500366', '収録物識別子タイプ', 'Source Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186920753[].subitem_1522646572813', '収録物識別子', 'Source Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186941041', 'Source Title', 'Source Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186941041[].subitem_1522650068558', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186941041[].subitem_1522650091861', '収録物名', 'Source Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186959569', 'Volume Number', 'Volume Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186959569.subitem_1551256328147', 'Volume Number', 'Volume Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186981471', 'Issue Number', 'Issue Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186981471.subitem_1551256294723', 'Issue Number', 'Issue Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186994930', 'Number of Pages', 'Number of Pages', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617186994930.subitem_1551256248092', 'Number of Pages', 'Number of Pages', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187024783', 'Page Start', 'Page Start', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187024783.subitem_1551256198917', 'Page Start', 'Page Start', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187045071', 'Page End', 'Page End', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187045071.subitem_1551256185532', 'Page End', 'Page End', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579', 'Bibliographic Information', 'Bibliographic Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographic_titles', '雑誌名', 'Journal Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographic_titles[].bibliographic_title', 'タイトル', 'Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographic_titles[].bibliographic_titleLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicVolumeNumber', '巻', 'Volume Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicIssueNumber', '号', 'Issue Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicPageStart', '開始ページ', 'Page Start', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicPageEnd', '終了ページ', 'Page End', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicNumberOfPages', 'ページ数', 'Number of Page', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicIssueDates', '発行日', 'Issue Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicIssueDates.bibliographicIssueDate', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187056579.bibliographicIssueDates.bibliographicIssueDateType', '日付タイプ', 'Date Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187087799', 'Dissertation Number', 'Dissertation Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187087799.subitem_1551256171004', 'Dissertation Number', 'Dissertation Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187112279', 'Degree Name', 'Degree Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187112279[].subitem_1551256126428', 'Degree Name', 'Degree Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187112279[].subitem_1551256129013', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187136212', 'Date Granted', 'Date Granted', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187136212.subitem_1551256096004', 'Date Granted', 'Date Granted', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617944105607', 'Degree Grantor', 'Degree Grantor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617944105607[].subitem_1551256015892', 'Degree Grantor Name Identifier', 'Degree Grantor Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617944105607[].subitem_1551256015892[].subitem_1551256027296', 'Degree Grantor Name Identifier', 'Degree Grantor Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617944105607[].subitem_1551256015892[].subitem_1551256029891', 'Degree Grantor Name Identifier Scheme', 'Degree Grantor Name Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617944105607[].subitem_1551256037922', 'Degree Grantor Name', 'Degree Grantor Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617944105607[].subitem_1551256037922[].subitem_1551256042287', 'Degree Grantor Name', 'Degree Grantor Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617944105607[].subitem_1551256037922[].subitem_1551256047619', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528', 'Conference', 'Conference', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711633003', 'Conference Name', 'Conference Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711633003[].subitem_1599711636923', 'Conference Name', 'Conference Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711633003[].subitem_1599711645590', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711655652', 'Conference Sequence', 'Conference Sequence', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711660052', 'Conference Sponsor', 'Conference Sponsor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711660052[].subitem_1599711680082', 'Conference Sponsor', 'Conference Sponsor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711660052[].subitem_1599711686511', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392', 'Conference Date', 'Conference Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711731891', 'Start Year', 'Start Year', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711727603', 'Start Month', 'Start Month', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711712451', 'Start Day', 'Start Day', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711743722', 'End Year', 'End Year', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711739022', 'End Month', 'End Month', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711704251', 'Conference Date', 'Conference Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711735410', 'End Day', 'End Day', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711699392.subitem_1599711745532', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711758470', 'Conference Venue', 'Conference Venue', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711758470[].subitem_1599711769260', 'Conference Venue', 'Conference Venue', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711758470[].subitem_1599711775943', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711788485', 'Conference Place', 'Conference Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711788485[].subitem_1599711798761', 'Conference Place', 'Conference Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711788485[].subitem_1599711803382', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617187187528[].subitem_1599711813532', 'Conference Country', 'Conference Country', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499', 'File', 'File', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].filename', '表示名', 'FileName', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].url', '本文URL', 'Text URL', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].url.url', '本文URL', 'Text URL', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].url.label', 'ラベル', 'Label', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].url.objectType', 'オブジェクトタイプ', 'Object Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].format', 'フォーマット', 'Format', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].filesize', 'サイズ', 'Size', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].filesize[].value', 'サイズ', 'Size', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].fileDate', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].fileDate[].fileDateType', '日付タイプ', 'Date Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].fileDate[].fileDateValue', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].version', 'バージョン情報', 'Version Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].displaytype', '表示形式', 'Preview', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].licensetype', 'ライセンス', 'License', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].licensefree', '', '自由ライセンス', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].accessrole', 'アクセス', 'Access', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].date[0].dateValue', '公開日', 'Opendate', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617605131499[].groups', 'グループ', 'Group', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617620223087', 'Heading', 'Heading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617620223087[].subitem_1565671149650', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617620223087[].subitem_1565671169640', 'Banner Headline', 'Banner Headline', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1617620223087[].subitem_1565671178623', 'Subheading', 'Subheading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662046377046', 'サムネイル', 'thumbnail', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662046377046.subitem_thumbnail', 'URI', 'URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662046377046.subitem_thumbnail[].thumbnail_url', 'URI', 'URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662046377046.subitem_thumbnail[].thumbnail_label', 'ラベル', 'Label', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662130103088', '見出し', '', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662130103088.subitem_heading_banner_headline', '大見出し', 'Heading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662130103088.subitem_heading_headline', '小見出し', 'Subheading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['item_1662130103088.subitem_heading_language', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['system_identifier_doi', 'Persistent Identifier(DOI)', 'Persistent Identifier(DOI)', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemidt_identifier', 'SYSTEMIDT Identifier', 'SYSTEMIDT Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemidt_identifier_type', 'SYSTEMIDT Identifier Type', 'SYSTEMIDT Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['system_identifier_hdl', 'Persistent Identifier(HDL)', 'Persistent Identifier(HDL)', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemidt_identifier', 'SYSTEMIDT Identifier', 'SYSTEMIDT Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemidt_identifier_type', 'SYSTEMIDT Identifier Type', 'SYSTEMIDT Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['system_identifier_uri', 'Persistent Identifier(URI)', 'Persistent Identifier(URI)', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemidt_identifier', 'SYSTEMIDT Identifier', 'SYSTEMIDT Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemidt_identifier_type', 'SYSTEMIDT Identifier Type', 'SYSTEMIDT Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['system_file', 'File Information', 'File Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_filename', 'SYSTEMFILE Filename', 'SYSTEMFILE Filename', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_filename[].subitem_systemfile_filename_label', 'SYSTEMFILE Filename Label', 'SYSTEMFILE Filename Label', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_filename[].subitem_systemfile_filename_type', 'SYSTEMFILE Filename Type', 'SYSTEMFILE Filename Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_filename[].subitem_systemfile_filename_uri', 'SYSTEMFILE Filename URI', 'SYSTEMFILE Filename URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_mimetype', 'SYSTEMFILE MimeType', 'SYSTEMFILE MimeType', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_size', 'SYSTEMFILE Size', 'SYSTEMFILE Size', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_datetime', 'SYSTEMFILE DateTime', 'SYSTEMFILE DateTime', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_datetime[].subitem_systemfile_datetime_date', 'SYSTEMFILE DateTime Date', 'SYSTEMFILE DateTime Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_datetime[].subitem_systemfile_datetime_type', 'SYSTEMFILE DateTime Type', 'SYSTEMFILE DateTime Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''], ['parentkey.subitem_systemfile_version', 'SYSTEMFILE Version', 'SYSTEMFILE Version', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, '']]
+    meta = [{
+        'bibliographicPageEnd': '100',
+        'bibliographic_titles': [
+            {'bibliographic_title': '雑誌タイトル', 'bibliographic_titleLang': 'ja'},
+            {'bibliographic_title': 'Journal Title', 'bibliographic_titleLang': 'en'}],
+        'bibliographicPageStart': '1',
+        'bibliographicIssueDates': {'bibliographicIssueDate': '2022-08-29', 'bibliographicIssueDateType':'Issued'},
+        'bibliographicIssueNumber': '12',
+        'bibliographicVolumeNumber': '1', 'bibliographicNumberOfPages': '99'},{'bibliographicPageEnd': None, 'bibliographic_titles': [], 'bibliographicPageStart': '1', 'bibliographicIssueDates': {'bibliographicIssueDate': '2022-08-29', 'bibliographicIssueDateType': 'Issued'}, 'bibliographicIssueNumber': '12', 'bibliographicVolumeNumber': '1', 'bibliographicNumberOfPages': '99'}
+
+    ]
+    props = [
+        ['pubdate', 'PubDate', 'PubDate', {'required': True, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186331708', 'Title', 'Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186331708[].subitem_1551255647225', 'Title', 'Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186331708[].subitem_1551255648112', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186385884', 'Alternative Title', 'Alternative Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186385884[].subitem_1551255720400', 'Alternative Title', 'Alternative Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186385884[].subitem_1551255721061', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668', 'Creator', 'Creator', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].authorInputButton', '著者DBから入力', '著者DBから入力', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].nameIdentifiers', '作成者識別子', 'Creator Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].nameIdentifiers[].nameIdentifierScheme', '作成者識別子Scheme', 'Creator Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].nameIdentifiers[].nameIdentifierURI', '作成者識別子URI', 'Creator Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].nameIdentifiers[].nameIdentifier', '作成者識別子', 'Creator Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorNames', '作成者姓名', 'Creator Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorNames[].creatorName', '姓名', 'Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorNames[].creatorNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].familyNames', '作成者姓', 'Creator Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].familyNames[].familyName', '姓', 'Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].familyNames[].familyNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].givenNames', '作成者名', 'Creator Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].givenNames[].givenName', '名', 'Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].givenNames[].givenNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAlternatives', '作成者別名', 'Creator Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAlternatives[].creatorAlternative', '別名', 'Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAlternatives[].creatorAlternativeLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorMails', '作成者メールアドレス', 'Creator Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorMails[].creatorMail', 'メールアドレス', 'Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations', '作成者所属', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers[].affiliationNameIdentifier', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers[].affiliationNameIdentifierScheme', '所属機関識別子スキーマ', 'Affiliation Name Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations[].affiliationNameIdentifiers[].affiliationNameIdentifierURI', '所属機関識別子URI', 'Affiliation Name Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations[].affiliationNames', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations[].affiliationNames[].affiliationName', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186419668[].creatorAffiliations[].affiliationNames[].affiliationNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064', 'Contributor', 'Contributor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorType', '寄与者タイプ', 'Contributor Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].nameIdentifiers', '寄与者識別子', 'Contributor Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].nameIdentifiers[].nameIdentifierScheme', '寄与者識別子Scheme', 'Contributor Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].nameIdentifiers[].nameIdentifierURI', '寄与者識別子URI', 'Contributor Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].nameIdentifiers[].nameIdentifier', '寄与者識別子', 'Contributor Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorNames', '寄与者姓名', 'Contributor Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorNames[].contributorName', '姓名', 'Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorNames[].lang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].familyNames', '寄与者姓', 'Contributor Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].familyNames[].familyName', '姓', 'Family Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].familyNames[].familyNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].givenNames', '寄与者名', 'Contributor Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].givenNames[].givenName', '名', 'Given Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].givenNames[].givenNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAlternatives', '寄与者別名', 'Contributor Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAlternatives[].contributorAlternative', '別名', 'Alternative Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAlternatives[].contributorAlternativeLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations', '寄与者所属', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers[].contributorAffiliationNameIdentifier', '所属機関識別子', 'Affiliation Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers[].contributorAffiliationScheme', '所属機関識別子スキーマ', 'Affiliation Name Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNameIdentifiers[].contributorAffiliationURI', '所属機関識別子URI', 'Affiliation Name Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNames', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNames[].contributorAffiliationName', '所属機関名', 'Affiliation Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorAffiliations[].contributorAffiliationNames[].contributorAffiliationNameLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorMails', '寄与者メールアドレス', 'Contributor Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].contributorMails[].contributorMail', 'メールアドレス', 'Email Address', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349709064[].authorInputButton', '著者DBから入力', '著者DBから入力', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186476635', 'Access Rights', 'Access Rights', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186476635.subitem_1522299639480', 'アクセス権', 'Access Rights', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186476635.subitem_1600958577026', 'アクセス権URI', 'Access Rights URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617351524846', 'APC', 'APC', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617351524846.subitem_1523260933860', 'APC', 'APC', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186499011', 'Rights', 'Rights', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186499011[].subitem_1522650717957', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186499011[].subitem_1522650727486', '権利情報Resource', 'Rights Information Resource', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186499011[].subitem_1522651041219', '権利情報', 'Rights Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286', 'Rights Holder', 'Rights Holder', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286[].nameIdentifiers', '権利者識別子', 'Right Holder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286[].nameIdentifiers[].nameIdentifierScheme', '権利者識別子Scheme', 'Right Holder Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286[].nameIdentifiers[].nameIdentifierURI', '権利者識別子URI', 'Right Holder Identifier URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286[].nameIdentifiers[].nameIdentifier', '権利者識別子', 'Right Holder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286[].rightHolderNames', '権利者名', 'Right Holder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286[].rightHolderNames[].rightHolderLanguage', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617610673286[].rightHolderNames[].rightHolderName', '権利者名', 'Right Holder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186609386', 'Subject', 'Subject', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186609386[].subitem_1522299896455', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186609386[].subitem_1522300014469', '主題Scheme', 'Subject Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186609386[].subitem_1522300048512', '主題URI', 'Subject URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186609386[].subitem_1523261968819', '主題', 'Subject', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186626617', 'Description', 'Description', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186626617[].subitem_description_type', '内容記述タイプ', 'Description Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186626617[].subitem_description', '内容記述', 'Description', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186626617[].subitem_description_language', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186643794', 'Publisher', 'Publisher', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186643794[].subitem_1522300295150', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186643794[].subitem_1522300316516', '出版者', 'Publisher', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186660861', 'Date', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186660861[].subitem_1522300695726', '日付タイプ', 'Date Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186660861[].subitem_1522300722591', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186702042', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186702042[].subitem_1551255818386', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617258105262', 'Resource Type', 'Resource Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617258105262.resourcetype', '資源タイプ', 'Resource Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617258105262.resourceuri', '資源タイプ識別子', 'Resource Type Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349808926', 'Version', 'Version', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617349808926.subitem_1523263171732', 'バージョン情報', 'Version', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617265215918', 'Version Type', 'Version Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617265215918.subitem_1522305645492', '出版タイプ', 'Version Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617265215918.subitem_1600292170262', '出版タイプResource', 'Version Type Resource', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186783814', 'Identifier', 'Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186783814[].subitem_identifier_uri', '識別子', 'Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186783814[].subitem_identifier_type', '識別子タイプ', 'Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186819068', 'Identifier Registration', 'Identifier Registration', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186819068.subitem_identifier_reg_text', 'ID登録', 'Identifier Registration', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186819068.subitem_identifier_reg_type', 'ID登録タイプ', 'Identifier Registration Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429', 'Relation', 'Relation', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429[].subitem_1522306207484', '関連タイプ', 'Relation Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429[].subitem_1522306287251', '関連識別子', 'Relation Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429[].subitem_1522306287251.subitem_1522306382014', '識別子タイプ', 'Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429[].subitem_1522306287251.subitem_1522306436033', '関連識別子', 'Relation Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429[].subitem_1523320863692', '関連名称', 'Related Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429[].subitem_1523320863692[].subitem_1523320867455', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617353299429[].subitem_1523320863692[].subitem_1523320909613', '関連名称', 'Related Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186859717', 'Temporal', 'Temporal', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186859717[].subitem_1522658018441', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186859717[].subitem_1522658031721', '時間的範囲', 'Temporal', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738', 'Geo Location', 'Geo Location', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_point', '位置情報（点）', 'Geo Location Point', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_point.subitem_point_longitude', '経度', 'Point Longitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_point.subitem_point_latitude', '緯度', 'Point Latitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_box', '位置情報（空間）', 'Geo Location Box', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_box.subitem_west_longitude', '西部経度', 'West Bound Longitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_box.subitem_east_longitude', '東部経度', 'East Bound Longitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_box.subitem_south_latitude', '南部緯度', 'South Bound Latitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_box.subitem_north_latitude', '北部緯度', 'North Bound Latitude', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_place', '位置情報（自由記述）', 'Geo Location Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186882738[].subitem_geolocation_place[].subitem_geolocation_place_text', '位置情報（自由記述）', 'Geo Location Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218', 'Funding Reference', 'Funding Reference', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399143519', '助成機関識別子', 'Funder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399143519.subitem_1522399281603', '助成機関識別子タイプ', 'Funder Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399143519.subitem_1522399333375', '助成機関識別子', 'Funder Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399412622', '助成機関名', 'Funder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399412622[].subitem_1522399416691', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399412622[].subitem_1522737543681', '助成機関名', 'Funder Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399571623', '研究課題番号', 'Award Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399571623.subitem_1522399585738', '研究課題URI', 'Award URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399571623.subitem_1522399628911', '研究課題番号', 'Award Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399651758', '研究課題名', 'Award Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399651758[].subitem_1522721910626', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186901218[].subitem_1522399651758[].subitem_1522721929892', '研究課題名', 'Award Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186920753', 'Source Identifier', 'Source Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186920753[].subitem_1522646500366', '収録物識別子タイプ', 'Source Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186920753[].subitem_1522646572813', '収録物識別子', 'Source Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186941041', 'Source Title', 'Source Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186941041[].subitem_1522650068558', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186941041[].subitem_1522650091861', '収録物名', 'Source Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186959569', 'Volume Number', 'Volume Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186959569.subitem_1551256328147', 'Volume Number', 'Volume Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186981471', 'Issue Number', 'Issue Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186981471.subitem_1551256294723', 'Issue Number', 'Issue Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186994930', 'Number of Pages', 'Number of Pages', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617186994930.subitem_1551256248092', 'Number of Pages', 'Number of Pages', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187024783', 'Page Start', 'Page Start', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187024783.subitem_1551256198917', 'Page Start', 'Page Start', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187045071', 'Page End', 'Page End', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187045071.subitem_1551256185532', 'Page End', 'Page End', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579', 'Bibliographic Information', 'Bibliographic Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographic_titles', '雑誌名', 'Journal Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographic_titles[].bibliographic_title', 'タイトル', 'Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographic_titles[].bibliographic_titleLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicVolumeNumber', '巻', 'Volume Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicIssueNumber', '号', 'Issue Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicPageStart', '開始ページ', 'Page Start', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicPageEnd', '終了ページ', 'Page End', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicNumberOfPages', 'ページ数', 'Number of Page', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicIssueDates', '発行日', 'Issue Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicIssueDates.bibliographicIssueDate', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187056579.bibliographicIssueDates.bibliographicIssueDateType', '日付タイプ', 'Date Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187087799', 'Dissertation Number', 'Dissertation Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187087799.subitem_1551256171004', 'Dissertation Number', 'Dissertation Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187112279', 'Degree Name', 'Degree Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187112279[].subitem_1551256126428', 'Degree Name', 'Degree Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187112279[].subitem_1551256129013', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187136212', 'Date Granted', 'Date Granted', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187136212.subitem_1551256096004', 'Date Granted', 'Date Granted', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617944105607', 'Degree Grantor', 'Degree Grantor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617944105607[].subitem_1551256015892', 'Degree Grantor Name Identifier', 'Degree Grantor Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617944105607[].subitem_1551256015892[].subitem_1551256027296', 'Degree Grantor Name Identifier', 'Degree Grantor Name Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617944105607[].subitem_1551256015892[].subitem_1551256029891', 'Degree Grantor Name Identifier Scheme', 'Degree Grantor Name Identifier Scheme', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617944105607[].subitem_1551256037922', 'Degree Grantor Name', 'Degree Grantor Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617944105607[].subitem_1551256037922[].subitem_1551256042287', 'Degree Grantor Name', 'Degree Grantor Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617944105607[].subitem_1551256037922[].subitem_1551256047619', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528', 'Conference', 'Conference', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711633003', 'Conference Name', 'Conference Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711633003[].subitem_1599711636923', 'Conference Name', 'Conference Name', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711633003[].subitem_1599711645590', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711655652', 'Conference Sequence', 'Conference Sequence', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711660052', 'Conference Sponsor', 'Conference Sponsor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711660052[].subitem_1599711680082', 'Conference Sponsor', 'Conference Sponsor', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711660052[].subitem_1599711686511', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392', 'Conference Date', 'Conference Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711731891', 'Start Year', 'Start Year', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711727603', 'Start Month', 'Start Month', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711712451', 'Start Day', 'Start Day', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711743722', 'End Year', 'End Year', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711739022', 'End Month', 'End Month', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711704251', 'Conference Date', 'Conference Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711735410', 'End Day', 'End Day', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711699392.subitem_1599711745532', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711758470', 'Conference Venue', 'Conference Venue', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711758470[].subitem_1599711769260', 'Conference Venue', 'Conference Venue', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711758470[].subitem_1599711775943', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711788485', 'Conference Place', 'Conference Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711788485[].subitem_1599711798761', 'Conference Place', 'Conference Place', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711788485[].subitem_1599711803382', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617187187528[].subitem_1599711813532', 'Conference Country', 'Conference Country', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499', 'File', 'File', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].filename', '表示名', 'FileName', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].url', '本文URL', 'Text URL', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].url.url', '本文URL', 'Text URL', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].url.label', 'ラベル', 'Label', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].url.objectType', 'オブジェクトタイプ', 'Object Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].format', 'フォーマット', 'Format', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].filesize', 'サイズ', 'Size', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].filesize[].value', 'サイズ', 'Size', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].fileDate', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].fileDate[].fileDateType', '日付タイプ', 'Date Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].fileDate[].fileDateValue', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].version', 'バージョン情報', 'Version Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].displaytype', '表示形式', 'Preview', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].licensetype', 'ライセンス', 'License', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].licensefree', '', '自由ライセンス', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].accessrole', 'アクセス', 'Access', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].date[0].dateValue', '公開日', 'Opendate', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617605131499[].groups', 'グループ', 'Group', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617620223087', 'Heading', 'Heading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617620223087[].subitem_1565671149650', 'Language', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617620223087[].subitem_1565671169640', 'Banner Headline', 'Banner Headline', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1617620223087[].subitem_1565671178623', 'Subheading', 'Subheading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662046377046', 'サムネイル', 'thumbnail', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662046377046.subitem_thumbnail', 'URI', 'URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662046377046.subitem_thumbnail[].thumbnail_url', 'URI', 'URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662046377046.subitem_thumbnail[].thumbnail_label', 'ラベル', 'Label', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662130103088', '見出し', '', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662130103088.subitem_heading_banner_headline', '大見出し', 'Heading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662130103088.subitem_heading_headline', '小見出し', 'Subheading', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1662130103088.subitem_heading_language', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134', 'Bibliographic Information', 'Bibliographic Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographic_titles', '雑誌名', 'Journal Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographic_titles[].bibliographic_title', 'タイトル', 'Title', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographic_titles[].bibliographic_titleLang', '言語', 'Language', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicVolumeNumber', '巻', 'Volume Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicIssueNumber', '号', 'Issue Number', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicPageStart', '開始ページ', 'Page Start', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicPageEnd', '終了ページ', 'Page End', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicNumberOfPages', 'ページ数', 'Number of Page', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicIssueDates', '発行日', 'Issue Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicIssueDates.bibliographicIssueDate', '日付', 'Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['item_1727608787134.bibliographicIssueDates.bibliographicIssueDateType', '日付タイプ', 'Date Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['system_identifier_doi', 'Persistent Identifier(DOI)', 'Persistent Identifier(DOI)', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemidt_identifier', 'SYSTEMIDT Identifier', 'SYSTEMIDT Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemidt_identifier_type', 'SYSTEMIDT Identifier Type', 'SYSTEMIDT Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['system_identifier_hdl', 'Persistent Identifier(HDL)', 'Persistent Identifier(HDL)', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemidt_identifier', 'SYSTEMIDT Identifier', 'SYSTEMIDT Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemidt_identifier_type', 'SYSTEMIDT Identifier Type', 'SYSTEMIDT Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['system_identifier_uri', 'Persistent Identifier(URI)', 'Persistent Identifier(URI)', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemidt_identifier', 'SYSTEMIDT Identifier', 'SYSTEMIDT Identifier', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemidt_identifier_type', 'SYSTEMIDT Identifier Type', 'SYSTEMIDT Identifier Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['system_file', 'File Information', 'File Information', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_filename', 'SYSTEMFILE Filename', 'SYSTEMFILE Filename', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_filename[].subitem_systemfile_filename_label', 'SYSTEMFILE Filename Label', 'SYSTEMFILE Filename Label', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_filename[].subitem_systemfile_filename_type', 'SYSTEMFILE Filename Type', 'SYSTEMFILE Filename Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_filename[].subitem_systemfile_filename_uri', 'SYSTEMFILE Filename URI', 'SYSTEMFILE Filename URI', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_mimetype', 'SYSTEMFILE MimeType', 'SYSTEMFILE MimeType', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_size', 'SYSTEMFILE Size', 'SYSTEMFILE Size', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_datetime', 'SYSTEMFILE DateTime', 'SYSTEMFILE DateTime', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': False, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_datetime[].subitem_systemfile_datetime_date', 'SYSTEMFILE DateTime Date', 'SYSTEMFILE DateTime Date', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': True, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_datetime[].subitem_systemfile_datetime_type', 'SYSTEMFILE DateTime Type', 'SYSTEMFILE DateTime Type', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': True, 'non_display': False}, ''],
+        ['parentkey.subitem_systemfile_version', 'SYSTEMFILE Version', 'SYSTEMFILE Version', {'required': False, 'show_list': False, 'specify_newline': False, 'hide': True, 'non_display': False}, '']]
     return meta, props
 
 @pytest.fixture()
 def prepare_creator():
-    creator ={'givenNames': [{'givenName': '太郎', 'givenNameLang': 'ja'}, {'givenName': 'タロウ', 'givenNameLang': 'ja-Kana'}, {'givenName': 'Taro', 'givenNameLang': 'en'}], 'familyNames': [{'familyName': '情報', 'familyNameLang': 'ja'}, {'familyName': 'ジョウホウ', 'familyNameLang': 'ja-Kana'}, {'familyName': 'Joho', 'familyNameLang': 'en'}], 'creatorNames': [{'creatorName': '情報, 太郎', 'creatorNameLang': 'ja'}, {'creatorName': 'ジョウホウ, タロウ', 'creatorNameLang': 'ja-Kana'}, {'creatorName': 'Joho, Taro', 'creatorNameLang': 'en'}], 'nameIdentifiers': [{'nameIdentifier': 'xxxxxxx', 'nameIdentifierURI': 'https://orcid.org/', 'nameIdentifierScheme': 'ORCID'}, {'nameIdentifier': 'xxxxxxx', 'nameIdentifierURI': 'https://ci.nii.ac.jp/', 'nameIdentifierScheme': 'CiNii'}, {'nameIdentifier': 'zzzzzzz', 'nameIdentifierURI': 'https://kaken.nii.ac.jp/', 'nameIdentifierScheme': 'KAKEN2'}], 'creatorAffiliations': [{'affiliationNames': [{'affiliationName': '所属機関', 'affiliationNameLang': 'ja'}, {'affiliationName': 'Affilication Name', 'affiliationNameLang': 'en'}], 'affiliationNameIdentifiers': [{'affiliationNameIdentifier': 'xxxxxx', 'affiliationNameIdentifierURI': 'xxxxx', 'affiliationNameIdentifierScheme': 'ISNI'}]}], 'creatorAlternatives': [{'creatorAlternative': 'Alternative Name', 'creatorAlternativeLang': 'en'}, {'creatorAlternative': '別名', 'creatorAlternativeLang': 'ja'}]}
+    creator ={'givenNames': [{'givenName': '太郎', 'givenNameLang': 'ja'}, {'givenName': 'タロウ', 'givenNameLang': 'ja-Kana'}, {'givenName': 'Taro', 'givenNameLang': 'en'}], 'familyNames': [{'familyName': '情報', 'familyNameLang': 'ja'}, {'familyName': 'ジョウホウ', 'familyNameLang': 'ja-Kana'}, {'familyName': 'Joho', 'familyNameLang': 'en'}], 'creatorNames': [{'creatorName': '情報, 太郎', 'creatorNameLang': 'ja'}, {'creatorName': 'ジョウホウ, タロウ', 'creatorNameLang': 'ja-Kana'}, {'creatorName': 'Joho, Taro', 'creatorNameLang': 'en'}], 'nameIdentifiers': [{'nameIdentifier': 'xxxxxxx', 'nameIdentifierURI': 'https://orcid.org/', 'nameIdentifierScheme': 'ORCID'}, {'nameIdentifier': 'xxxxxxx', 'nameIdentifierURI': 'https://ci.nii.ac.jp/', 'nameIdentifierScheme': 'CiNii'}, {'nameIdentifier': 'zzzzzzz', 'nameIdentifierURI': 'https://kaken.nii.ac.jp/', 'nameIdentifierScheme': 'KAKEN2'}], 'creatorAffiliations': [{'affiliationNames': [{'affiliationName': '所属機関', 'affiliationNameLang': 'ja'}, {'affiliationName': 'Affilication Name', 'affiliationNameLang': 'cn'}], 'affiliationNameIdentifiers': [{'affiliationNameIdentifier': 'xxxxxx', 'affiliationNameIdentifierURI': 'xxxxx', 'affiliationNameIdentifierScheme': 'ISNI'}]}], 'creatorAlternatives': [{'creatorAlternative': 'Alternative Name', 'creatorAlternativeLang': 'en'}, {'creatorAlternative': '別名', 'creatorAlternativeLang': 'ja'}]}
     return creator
 
 @pytest.fixture()
@@ -993,84 +1831,92 @@ def db_actions(app,db):
 
 @pytest.fixture()
 def db_activity(app, db,users,location,db_itemtype,db_actions):
-    flow_define = FlowDefine(id=1,flow_id=uuid.uuid4(),
-                             flow_name='Registration Flow',
-                             flow_user=1)
+    flow_define = FlowDefine(
+        id=1,flow_id=uuid.uuid4(),
+        flow_name='Registration Flow',
+        flow_user=1)
     with db.session.begin_nested():
         db.session.add(flow_define)
     db.session.commit()
 
-    flow_action1 = FlowAction(status='N',
-                     flow_id=flow_define.flow_id,
-                     action_id=1,
-                     action_version='1.0.0',
-                     action_order=1,
-                     action_condition='',
-                     action_status='A',
-                     action_date=datetime.strptime('2018/07/28 0:00:00','%Y/%m/%d %H:%M:%S'),
-                     send_mail_setting={})
-    flow_action2 = FlowAction(status='N',
-                     flow_id=flow_define.flow_id,
-                     action_id=3,
-                     action_version='1.0.0',
-                     action_order=2,
-                     action_condition='',
-                     action_status='A',
-                     action_date=datetime.strptime('2018/07/28 0:00:00','%Y/%m/%d %H:%M:%S'),
-                     send_mail_setting={})
-    flow_action3 = FlowAction(status='N',
-                     flow_id=flow_define.flow_id,
-                     action_id=5,
-                     action_version='1.0.0',
-                     action_order=3,
-                     action_condition='',
-                     action_status='A',
-                     action_date=datetime.strptime('2018/07/28 0:00:00','%Y/%m/%d %H:%M:%S'),
-                     send_mail_setting={})
+    flow_action1 = FlowAction(
+        status='N',
+        flow_id=flow_define.flow_id,
+        action_id=1,
+        action_version='1.0.0',
+        action_order=1,
+        action_condition='',
+        action_status='A',
+        action_date=datetime.strptime('2018/07/28 0:00:00','%Y/%m/%d %H:%M:%S'),
+        send_mail_setting={})
+    flow_action2 = FlowAction(
+        status='N',
+        flow_id=flow_define.flow_id,
+        action_id=3,
+        action_version='1.0.0',
+        action_order=2,
+        action_condition='',
+        action_status='A',
+        action_date=datetime.strptime('2018/07/28 0:00:00','%Y/%m/%d %H:%M:%S'),
+        send_mail_setting={})
+    flow_action3 = FlowAction(
+        status='N',
+        flow_id=flow_define.flow_id,
+        action_id=5,
+        action_version='1.0.0',
+        action_order=3,
+        action_condition='',
+        action_status='A',
+        action_date=datetime.strptime('2018/07/28 0:00:00','%Y/%m/%d %H:%M:%S'),
+        send_mail_setting={})
     with db.session.begin_nested():
         db.session.add(flow_action1)
         db.session.add(flow_action2)
         db.session.add(flow_action3)
     db.session.commit()
-    no_location_workflow = WorkFlow(flows_id=uuid.uuid4(),
-                        flows_name='test workflow1',
-                        itemtype_id=1,
-                        index_tree_id=None,
-                        flow_id=1,
-                        is_deleted=False,
-                        open_restricted=False,
-                        location_id=None,
-                        is_gakuninrdm=False)
-    location_workflow = WorkFlow(flows_id=uuid.uuid4(),
-                        flows_name='test workflow2',
-                        itemtype_id=1,
-                        index_tree_id=None,
-                        flow_id=1,
-                        is_deleted=False,
-                        open_restricted=False,
-                        location_id=int(location.id),
-                        is_gakuninrdm=False)
+    no_location_workflow = WorkFlow(
+        flows_id=uuid.uuid4(),
+        flows_name='test workflow1',
+        itemtype_id=1,
+        index_tree_id=None,
+        flow_id=1,
+        is_deleted=False,
+        open_restricted=False,
+        location_id=None,
+        is_gakuninrdm=False)
+    location_workflow = WorkFlow(
+        flows_id=uuid.uuid4(),
+        flows_name='test workflow2',
+        itemtype_id=1,
+        index_tree_id=None,
+        flow_id=1,
+        is_deleted=False,
+        open_restricted=False,
+        location_id=int(location.id),
+        is_gakuninrdm=False)
     with db.session.begin_nested():
         db.session.add(no_location_workflow)
         db.session.add(location_workflow)
-    no_location_activity = Activity(activity_id='1',workflow_id=no_location_workflow.id, flow_id=flow_define.id,
-                    action_id=1, activity_login_user=1,
-                    activity_update_user=1,
-                    activity_start=datetime.strptime('2022/04/14 3:01:53.931', '%Y/%m/%d %H:%M:%S.%f'),
-                    activity_community_id=3,
-                    activity_confirm_term_of_use=True,
-                    title='test', shared_user_ids=[], extra_info={},
-                    action_order=1,
-                    )
-    location_activity = Activity(activity_id='2',workflow_id=location_workflow.id, flow_id=flow_define.id,
-                    action_id=1, activity_login_user=1,
-                    activity_update_user=1,
-                    activity_start=datetime.strptime('2022/04/14 3:01:53.931', '%Y/%m/%d %H:%M:%S.%f'),
-                    activity_community_id=3,
-                    activity_confirm_term_of_use=True,
-                    title='test', shared_user_ids=[], extra_info={},
-                    action_order=1,
-                    )
+    no_location_activity = Activity(
+        activity_id='1',workflow_id=no_location_workflow.id, flow_id=flow_define.id,
+        action_id=1, activity_login_user=1,
+        activity_update_user=1,
+        activity_start=datetime.strptime('2022/04/14 3:01:53.931', '%Y/%m/%d %H:%M:%S.%f'),
+        activity_community_id=3,
+        activity_confirm_term_of_use=True,
+        title='test', shared_user_ids=[], extra_info={},
+        action_order=1,
+        )
+    location_activity = Activity(
+        activity_id='2',workflow_id=location_workflow.id, flow_id=flow_define.id,
+        action_id=1, activity_login_user=1,
+        activity_update_user=1,
+        activity_start=datetime.strptime('2022/04/14 3:01:53.931', '%Y/%m/%d %H:%M:%S.%f'),
+        activity_community_id=3,
+        activity_confirm_term_of_use=True,
+        title='test', shared_user_ids=[], extra_info={},
+        action_order=1,
+        )
     with db.session.begin_nested():
         db.session.add(no_location_activity)
         db.session.add(location_activity)

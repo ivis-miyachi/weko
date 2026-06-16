@@ -26,8 +26,9 @@ docker compose -f docker-compose2.yml exec postgresql psql -U invenio -d invenio
 # docker cp scripts/demo/resticted_access.sql $(docker compose -f docker-compose2.yml ps -q postgresql):/tmp/resticted_access.sql
 # docker compose -f docker-compose2.yml exec postgresql psql -U invenio -d invenio -f /tmp/resticted_access.sql
 
-docker compose -f docker-compose2.yml run --rm web invenio assets build
-docker compose -f docker-compose2.yml run --rm web invenio collect -v
+docker-compose -f run --rm web invenio webpack create
+docker-compose -f run --rm web invenio collect -v
+docker-compose -f run --rm web invenio webpack build
 
 # Start services
 docker compose -f docker-compose2.yml up -d

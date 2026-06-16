@@ -33,9 +33,9 @@ import traceback
 from urllib.parse import urljoin
 
 import pytz
-from celery.task.control import inspect
-from flask import Flask, current_app, request, session, url_for
-from flask_babelex import gettext as _
+from celery import current_app as current_celery_app
+from flask import current_app, request, session
+from flask_babel import gettext as _
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_security import current_user
@@ -50,9 +50,10 @@ from invenio_cache import current_cache
 from invenio_db import db
 from invenio_files_rest.models import Bucket, ObjectVersion
 from invenio_i18n.ext import current_i18n
+from invenio_indexer.api import RecordIndexer
 from invenio_mail.admin import MailSettingView
 from invenio_mail.models import MailConfig, MailTemplates, MailType, MailTemplateUsers
-from invenio_pidrelations.contrib.versioning import PIDVersioning
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
 from invenio_pidrelations.models import PIDRelation
 from invenio_pidstore.models import PersistentIdentifier, \
     PIDDoesNotExistError, PIDStatus
@@ -298,7 +299,6 @@ def register_hdl_by_item_id(deposit_id, item_uuid, url_root):
 
     weko_handle = Handle()
     handle = weko_handle.register_handle(location=record_url)
-
     if handle:
         handle = WEKO_SERVER_CNRI_HOST_LINK + str(handle)
         identifier = IdentifierHandle(item_uuid)
@@ -326,7 +326,6 @@ def register_hdl_by_handle(hdl, item_uuid, item_uri):
     weko_handle = Handle()
     handle = weko_handle.register_handle(
         location=item_uri, hdl=hdl, overwrite=True)
-
     if handle:
         handle = WEKO_SERVER_CNRI_HOST_LINK + str(handle)
         identifier = IdentifierHandle(item_uuid)
@@ -1819,6 +1818,11 @@ def prepare_edit_workflow(post_activity, recid, deposit):
             _deposit['_deposit']['status'] = 'draft'
             _deposit.merge_data_to_record_without_version(recid, True)
             _deposit.publish()
+            if not RecordsBuckets.query.filter_by(record_id=_deposit.id).first():
+                bucket = Bucket.create(storage_class=current_app.config[
+                    'DEPOSIT_DEFAULT_STORAGE_CLASS'
+                ])
+                RecordsBuckets.create(record=_deposit.model, bucket=bucket)
             _bucket = Bucket.get(_deposit.files.bucket.id)
 
             if not _bucket:
@@ -2071,10 +2075,9 @@ def handle_finish_workflow(deposit, current_pid, recid):
                     merge_data_to_record_without_version(current_pid)
                 _deposit.publish()
 
-                pv = PIDVersioning(child=pid_without_ver)
-                last_ver = PIDVersioning(parent=pv.parent,child=pid_without_ver).get_children(
-                    pid_status=PIDStatus.REGISTERED
-                ).filter(PIDRelation.relation_type == 2).order_by(
+                parent_pid = PIDNodeVersioning(pid=pid_without_ver).parents.one_or_none()
+                pv = PIDNodeVersioning(pid=parent_pid)
+                last_ver = pv.children.order_by(
                     PIDRelation.index.desc()).first()
                 # Handle Edit workflow
                 if ".0" in current_pid.pid_value:
@@ -2148,8 +2151,19 @@ def handle_finish_workflow(deposit, current_pid, recid):
                                  new_item_reference_list=new_item_reference_list)
 
         if pid_without_ver:
-            from invenio_oaiserver.tasks import update_records_sets
-            update_records_sets.delay([str(pid_without_ver.object_uuid)])
+            # update record to OS
+            query = (x[0] for x in PersistentIdentifier.query.filter_by(
+                object_type='rec', status=PIDStatus.REGISTERED
+            ).filter(
+                PersistentIdentifier.pid_type.in_(['oai'])
+            ).filter(
+                PersistentIdentifier.object_uuid.in_([str(pid_without_ver.object_uuid)])
+            ).values(
+                PersistentIdentifier.object_uuid
+            ))
+            RecordIndexer().bulk_index(query)
+            RecordIndexer().process_bulk_queue(
+                search_bulk_kwargs={'raise_on_error': True})
             opration = "ITEM_CREATE" if is_newversion else "ITEM_UPDATE"
             target_key = recid.recid if is_newversion else pid_without_ver.pid_value
             UserActivityLogger.info(
@@ -2232,6 +2246,8 @@ def check_an_item_is_locked(item_id=None):
     Returns:
         bool: If the item is locked, return True, else False.
     """
+    _timeout = current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)
+    inspect = current_celery_app.control.inspect(timeout=_timeout)
     def check(workers):
         for worker in workers:
             for task in workers[worker]:
@@ -2241,11 +2257,10 @@ def check_an_item_is_locked(item_id=None):
         return False
 
     _timeout = current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)
-    if not item_id or not inspect(timeout=_timeout).ping():
+    if not item_id or not inspect.ping():
         return False
 
-    return check(inspect(timeout=_timeout).active()) or \
-        check(inspect(timeout=_timeout).reserved())
+    return check(inspect.active()) or check(inspect.reserved())
 
 
 def bulk_check_an_item_is_locked(item_ids=[]):
@@ -2256,13 +2271,14 @@ def bulk_check_an_item_is_locked(item_ids=[]):
     :return list: Locked item id list.
     """
     _timeout = current_app.config.get("CELERY_GET_STATUS_TIMEOUT", 3.0)
-    if not item_ids or not inspect(timeout=_timeout).ping():
+    inspect = current_celery_app.control.inspect(timeout=_timeout)
+    if not item_ids or not inspect.ping():
         return []
 
     item_ids = [str(item_id) for item_id in item_ids]
     result = []
     for state in ['active', 'reserved']:
-        workers = getattr(inspect(timeout=_timeout), state)()
+        workers = getattr(inspect, state)()
         for worker in workers:
             for task in workers[worker]:
                 if task['name'] == 'weko_search_ui.tasks.import_item' \
@@ -5126,11 +5142,11 @@ def delete_user_lock_activity_cache(activity_id, data):
 
 def get_contributors(pid_value, user_id_list_json=None):
     """Get contributors information.
-    
+
     Args:
         pid_value(str): PID value of item.
         user_id_list_json(list, Optional): List of user IDs in JSON format.
-    
+
     Returns:
         list: A list of dictionaries containing contributor information.
     """

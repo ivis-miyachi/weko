@@ -1,27 +1,10 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2016 CERN.
+# Copyright (C) 2016-2019 CERN.
 #
-# Invenio is free software; you can redistribute it
-# and/or modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 2 of the
-# License, or (at your option) any later version.
-#
-# Invenio is distributed in the hope that it will be
-# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Invenio; if not, write to the
-# Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
-# MA 02111-1307, USA.
-#
-# In applying this license, CERN does not
-# waive the privileges and immunities granted to it by virtue of its status
-# as an Intergovernmental Organization or submit itself to any jurisdiction.
-
+# Invenio is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
 
 """Pytest configuration."""
 
@@ -34,7 +17,7 @@ import json
 from os.path import dirname, exists, join
 import pytest
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_celeryext import FlaskCeleryExt
 from flask.cli import ScriptInfo
 from flask_menu import Menu
@@ -52,7 +35,7 @@ from invenio_db import InvenioDB
 from invenio_db import db as db_
 from invenio_deposit import InvenioDeposit
 from invenio_files_rest import InvenioFilesREST
-from invenio_files_rest.models import Location
+from invenio_files_rest.models import Location, Bucket
 from invenio_indexer import InvenioIndexer
 from invenio_mail import InvenioMail
 from invenio_oaiserver import InvenioOAIServer
@@ -71,8 +54,8 @@ from weko_records.api import ItemsMetadata
 from invenio_communities import InvenioCommunities
 from invenio_communities.models import Community
 from invenio_communities.views.api import blueprint as api_blueprint
-from invenio_communities.views.ui import blueprint as ui_blueprint
-
+from invenio_communities.views.ui import Blueprint
+from mock import patch
 
 @pytest.yield_fixture()
 def instance_path():
@@ -88,7 +71,7 @@ def base_app(instance_path, request):
         TESTING=True,
         CELERY_ALWAYS_EAGER=True,
         CELERY_CACHE_BACKEND="memory",
-        CELERY_EAGER_PROPAGATES_EXCEPTIONS=True,
+        task_eager_propagates=True,
         CELERY_RESULT_BACKEND="cache",
         COMMUNITIES_MAIL_ENABLED=False,
         SECRET_KEY='CHANGE_ME',
@@ -131,6 +114,7 @@ def base_app(instance_path, request):
     InvenioCommunities(app_)
     InvenioMail(app_)
 
+    ui_blueprint = Blueprint('invenio_communities', __name__)
     app_.register_blueprint(ui_blueprint)
     app_.register_blueprint(api_blueprint, url_prefix='/api/communities')
 
@@ -425,9 +409,9 @@ def create_record(db, record_data, item_data):
     return recid, depid, record, item, parent, doi, deposit
 
 @pytest.fixture()
-def db_records(app,db,mocker):
-    mocker.patch("invenio_records.api.before_record_insert.send")
-    mocker.patch("invenio_records.api.after_record_insert.send")
+def db_records(app,db):
+    patch("invenio_records.api.before_record_insert.send")
+    patch("invenio_records.api.after_record_insert.send")
     record_datas = list()
     with open("tests/data/test_record/record_metadata.json") as f:
         record_datas = json.load(f)
@@ -435,7 +419,13 @@ def db_records(app,db,mocker):
     item_datas = list()
     with open("tests/data/test_record/item_metadata.json") as f:
         item_datas = json.load(f)
+    
+    mock_location = Location(id=1, name="mock-location", uri="mock://location", default=True)
+    db.session.add(mock_location)
+    db.session.commit()
 
-    recid, depid, record, item, parent, doi, deposit = create_record(db,record_datas[0],item_datas[0])
+    mock_bucket = Bucket(id=uuid.uuid4(), default_location=1)
+    with patch("invenio_files_rest.models.Bucket.create", return_value=mock_bucket):
+        recid, depid, record, item, parent, doi, deposit = create_record(db, record_datas[0], item_datas[0])
 
     return recid, depid, record, item, parent, doi, deposit

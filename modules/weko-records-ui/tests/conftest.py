@@ -36,9 +36,11 @@ from sqlalchemy.sql import func
 from invenio_mail import InvenioMail
 
 import pytest
-from elasticsearch import Elasticsearch
+# from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch
+from invenio_search.engine import search,dsl
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionRoles, ActionUsers
 from invenio_accounts import InvenioAccounts
@@ -65,8 +67,8 @@ from invenio_oauth2server.models import Client, Token
 from invenio_oauth2server.views import settings_blueprint as oauth2server_settings_blueprint
 from invenio_pidrelations import InvenioPIDRelations
 from invenio_pidrelations.models import PIDRelation
-from invenio_pidrelations.contrib.versioning import PIDVersioning
-from invenio_pidrelations.contrib.records import RecordDraft
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
+from invenio_pidrelations.contrib.draft import PIDNodeDraft
 from invenio_pidstore import InvenioPIDStore
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_previewer import InvenioPreviewer
@@ -168,6 +170,7 @@ def instance_path():
     shutil.rmtree(path)
 
 
+@patch.dict('os.environ', {'INVENIO_OPENSEARCH_USER': 'invenio', 'INVENIO_OPENSEARCH_PASSWORD': 'openpass123!'})
 @pytest.fixture()
 def base_app(instance_path):
     """Flask application fixture."""
@@ -234,7 +237,11 @@ def base_app(instance_path):
         WEKO_INDEX_TREE_REST_ENDPOINTS=WEKO_INDEX_TREE_REST_ENDPOINTS,
         I18N_LANGUAGES=[("ja", "Japanese"), ("en", "English"), ('fr', 'French')],
         SERVER_NAME="test_server",
-        SEARCH_ELASTIC_HOSTS="elasticsearch",
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST', 'opensearch'),
+        SEARCH_ELASTIC_HOSTS=os.environ.get(
+                    'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
         SEARCH_INDEX_PREFIX="test-",
         WEKO_SCHEMA_JPCOAR_V1_SCHEMA_NAME=WEKO_SCHEMA_JPCOAR_V1_SCHEMA_NAME,
         WEKO_SCHEMA_DDI_SCHEMA_NAME=WEKO_SCHEMA_DDI_SCHEMA_NAME,
@@ -335,7 +342,6 @@ def base_app(instance_path):
     WekoSchemaUI(app_)
     WekoAccounts(app_)
     #Menu(app_)
-    app_.register_blueprint(weko_records_ui_blueprint)
     app_.register_blueprint(weko_workflow_blueprint)
     app_.register_blueprint(invenio_files_rest_blueprint)  # invenio_files_rest
     app_.register_blueprint(invenio_oaiserver_blueprint)
@@ -1904,11 +1910,13 @@ def make_record(db, indexer, i, filepath, filename, mimetype, shared_ids, file_h
         status=PIDStatus.REGISTERED,
     )
 
-    h1 = PIDVersioning(parent=parent)
-    h1.insert_child(child=recid)
-    h1.insert_child(child=recid_v1)
-    RecordDraft.link(recid, depid)
-    RecordDraft.link(recid_v1, depid_v1)
+    h1 = PIDNodeVersioning(pid=parent)
+    h1.insert_child(child_pid=recid)
+    h1.insert_child(child_pid=recid_v1)
+    PIDNodeDraft(pid=recid).insert_child(depid)
+    PIDNodeDraft(pid=recid_v1).insert_child(depid_v1)
+    # RecordDraft.link(recid, depid)
+    # RecordDraft.link(recid_v1, depid_v1)
 
     if i % 2 == 1:
         doi = PersistentIdentifier.create(
@@ -2707,11 +2715,13 @@ def make_record_v2(db, indexer, i, files, thumbnail=None):
         status=PIDStatus.REGISTERED,
     )
 
-    h1 = PIDVersioning(parent=parent)
-    h1.insert_child(child=recid)
-    h1.insert_child(child=recid_v1)
-    RecordDraft.link(recid, depid)
-    RecordDraft.link(recid_v1, depid_v1)
+    h1 = PIDNodeVersioning(pid=parent)
+    h1.insert_child(child_pid=recid)
+    h1.insert_child(child_pid=recid_v1)
+    PIDNodeDraft(pid=recid).insert_child(depid)
+    PIDNodeDraft(pid=recid_v1).insert_child(depid_v1)
+    # RecordDraft.link(recid, depid)
+    # RecordDraft.link(recid_v1, depid_v1)
 
     if i % 2 == 1:
         doi = PersistentIdentifier.create(
@@ -3819,11 +3829,13 @@ def make_record_restricted(db, indexer, i, filepath, filename, mimetype ,userId 
         status=PIDStatus.REGISTERED,
     )
 
-    h1 = PIDVersioning(parent=parent)
-    h1.insert_child(child=recid)
-    h1.insert_child(child=recid_v1)
-    RecordDraft.link(recid, depid)
-    RecordDraft.link(recid_v1, depid_v1)
+    h1 = PIDNodeVersioning(pid=parent)
+    h1.insert_child(child_pid=recid)
+    h1.insert_child(child_pid=recid_v1)
+    PIDNodeDraft(pid=recid).insert_child(depid)
+    PIDNodeDraft(pid=recid_v1).insert_child(depid_v1)
+    # RecordDraft.link(recid, depid)
+    # RecordDraft.link(recid_v1, depid_v1)
 
     if i % 2 == 1:
         doi = PersistentIdentifier.create(

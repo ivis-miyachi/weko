@@ -24,7 +24,7 @@ from uuid import UUID
 from mock import patch, MagicMock
 from flask import Flask
 from flask_admin import Admin
-from flask_babelex import Babel
+from flask_babel import Babel
 from sqlalchemy_utils.functions import create_database, database_exists
 from datetime import datetime, timedelta
 from tests.helpers import create_record, json_data
@@ -55,6 +55,8 @@ from weko_gridlayout.services import WidgetItemServices
 from weko_gridlayout.admin import widget_adminview, WidgetSettingView
 from weko_gridlayout.models import WidgetType, WidgetItem,WidgetMultiLangData,WidgetDesignSetting,WidgetDesignPage
 from weko_admin.models import AdminLangSettings
+from invenio_i18n import InvenioI18N
+from babel import Locale
 
 
 @pytest.fixture(scope='module')
@@ -127,6 +129,7 @@ def base_app(instance_path):
     InvenioAccess(app_)
     InvenioFilesREST(app_)
     WekoGridLayout(app_)
+    InvenioI18N(app_)
     # InvenioCache(app_)
     # WekoAdmin(app_)
     InvenioStats(app_)
@@ -152,6 +155,11 @@ def i18n_app(app):
         app.extensions['invenio-queues'] = 1
         #app.extensions['invenio-search'] = MagicMock()
         app.extensions['invenio-i18n'] = MagicMock()
+        app.extensions['invenio-i18n'].get_locales.return_value = [
+            Locale.parse('en'),
+            Locale.parse('ja'),
+            Locale.parse('fr'),
+        ]
         app.extensions['invenio-i18n'].language = "ja"
         yield app
 

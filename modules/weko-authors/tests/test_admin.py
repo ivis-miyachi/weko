@@ -1,7 +1,7 @@
 # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
 
 from datetime import datetime
-from mock import patch
+from unittest.mock import patch
 import pytest
 from unittest.mock import MagicMock, mock_open
 
@@ -9,6 +9,7 @@ from flask import current_app, url_for, make_response, json
 from invenio_accounts.testutils import login_user_via_session
 from invenio_cache import current_cache
 from invenio_files_rest.models import FileInstance
+from jinja2 import Environment
 
 from weko_authors.admin import ImportView
 from weko_authors.tasks import import_author, import_id_prefix, import_affiliation_id
@@ -49,11 +50,12 @@ class TestAuthorManagementView():
             res =  client.get(url)
             assert_role(res,is_permission)
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestAuthorManagementView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_index(self,client,users,mocker):
+    def test_index(self,client,users):
+        client.application.jinja_env.add_extension("jinja2.ext.do")
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors.index')
         # tab_value = author
-        mock_render = mocker.patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
+        mock_render = patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
         args = {}
         res = client.get(url,query_string=args)
         mock_render.assert_called_with(
@@ -63,7 +65,7 @@ class TestAuthorManagementView():
         )
 
         # tab_value = prefix
-        mock_render = mocker.patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
+        mock_render = patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
         args = {"tab":"prefix"}
         res = client.get(url,query_string=args)
         mock_render.assert_called_with(
@@ -73,7 +75,7 @@ class TestAuthorManagementView():
         )
 
         # tab_value = affiliation
-        mock_render = mocker.patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
+        mock_render = patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
         args = {"tab":"affiliation"}
         res = client.get(url,query_string=args)
         mock_render.assert_called_with(
@@ -110,10 +112,11 @@ class TestAuthorManagementView():
             assert_role(res,is_permission)
 
 # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestAuthorManagementView::test_add -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_add(self,client,users,mocker):
+    def test_add(self,client,users):
+        client.application.jinja_env.add_extension("jinja2.ext.do")
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors.add')
-        mock_render = mocker.patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
+        mock_render = patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
         res = client.get(url)
         args, kwargs = mock_render.call_args
         assert args[0] == "weko_authors/admin/author_edit.html"
@@ -150,10 +153,11 @@ class TestAuthorManagementView():
             assert_role(res,is_permission)
 
 # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestAuthorManagementView::test_edit -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_edit(self,client,users,mocker):
+    def test_edit(self,client,users):
+        client.application.jinja_env.add_extension("jinja2.ext.do")
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors.edit')
-        mock_render = mocker.patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
+        mock_render = patch("weko_authors.admin.AuthorManagementView.render",return_value=make_response())
         res = client.get(url)
         args, kwargs = mock_render.call_args
         assert args[0] == "weko_authors/admin/author_edit.html"
@@ -193,10 +197,11 @@ class TestExportView():
             assert_role(res,is_permission)
 
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestExportView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_index(self,client,users,mocker):
+    def test_index(self,client,users):
+        client.application.jinja_env.add_extension("jinja2.ext.do")
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/export.index')
-        mock_render = mocker.patch("weko_authors.admin.ExportView.render",return_value=make_response())
+        mock_render = patch("weko_authors.admin.ExportView.render",return_value=make_response())
         res = client.get(url)
         mock_render.assert_called_with("weko_authors/admin/author_export.html")
 
@@ -220,16 +225,16 @@ class TestExportView():
         (7, False), # user
         (8, False), # student
     ])
-    def test_download_acl(self,client,users,users_index,is_permission,mocker):
+    def test_download_acl(self,client,users,users_index,is_permission):
         login_user_via_session(client=client, email=users[users_index]['email'])
         url = url_for('authors/export.download')
-        mocker.patch("weko_authors.admin.get_export_url", return_value={})
+        patch("weko_authors.admin.get_export_url", return_value={})
         with patch("flask.templating._render", return_value=""):
             res =  client.get(url)
             assert_role(res,is_permission)
 
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestExportView::test_download -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_download(self,client,db,users,mocker):
+    def test_download(self,client,db,users):
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/export.download')
         file_instance = FileInstance(
@@ -251,7 +256,7 @@ class TestExportView():
 
         # exist file_url
         current_cache.set(f"weko_authors_exported_url_{users[0]['id']}",{"file_uri":"strage/test/test_file.txt"})
-        mock_send = mocker.patch("weko_authors.admin.FileInstance.send_file",return_value=make_response())
+        mock_send = patch("weko_authors.admin.FileInstance.send_file",return_value=make_response())
         res = client.get(url)
         assert res.status_code == 200
         mock_send.assert_called()
@@ -283,7 +288,7 @@ class TestExportView():
         assert_role(res,is_permission)
 
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestExportView::test_check_status -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_check_status(self,client,users,mocker):
+    def test_check_status(self,client,users):
         class MockAsyncResult():
             def __init__(self,task_id,state,result):
                 self.state = state
@@ -304,14 +309,14 @@ class TestExportView():
         url = url_for('authors/export.check_status')
         current_cache.set(f"weko_authors_export_status_{users[0]['id']}",{"key":"authors_export_status","task_id":"test_task"})
         current_cache.set(f"weko_authors_exported_url_{users[0]['id']}",{"key":"authors_exported_url","file_uri":"test_file.txt"})
-        mocker.patch("weko_authors.admin.export_all.AsyncResult",return_value=MockAsyncResult("test_id","SUCCESS","result"))
+        patch("weko_authors.admin.export_all.AsyncResult",return_value=MockAsyncResult("test_id","SUCCESS","result"))
         res = client.get(url)
         test = {'code': 200, 'data': {'download_link': 'http://app/admin/authors/export/download/Creator_export_all', 'filename': '', 'key': 'authors_exported_url'}}
         assert json.loads(res.data)==test
 
-        # # not task.result
+        # not task.result
         current_cache.set(f"weko_authors_export_status_{users[0]['id']}",{"key":"authors_export_status","task_id":"test_task"})
-        mocker.patch("weko_authors.admin.export_all.AsyncResult",return_value=MockAsyncResult("test_id","SUCCESS",{}))
+        patch("weko_authors.admin.export_all.AsyncResult",return_value=MockAsyncResult("test_id","SUCCESS",{}))
         res = client.get(url)
         test = {'code': 200, 'data': {'download_link': 'http://app/admin/authors/export/download/Creator_export_all', 'error': 'export_fail', 'filename': '', 'key': 'authors_exported_url'}}
         assert json.loads(res.data)==test
@@ -319,7 +324,7 @@ class TestExportView():
         # not task is success,failed,revoked
         current_cache.set(f"weko_authors_export_status_{users[0]['id']}",{"key":"authors_export_status","task_id":"test_task"})
         current_cache.set(f"weko_authors_exported_url_{users[0]['id']}",{"key":"authors_exported_url","file_uri":"test_file.txt"})
-        mocker.patch("weko_authors.admin.export_all.AsyncResult",return_value=MockAsyncResult("test_id","STARTED",{}))
+        patch("weko_authors.admin.export_all.AsyncResult",return_value=MockAsyncResult("test_id","STARTED",{}))
         res = client.get(url)
         test = {'code': 200, 'data': {'download_link': 'http://app/admin/authors/export/download/Creator_export_all', 'filename': '', 'key': 'authors_export_status', "task_id": "test_task"}}
         assert json.loads(res.data) == test
@@ -399,23 +404,23 @@ class TestExportView():
         (7, False), # user
         (8, False), # student
     ])
-    def test_export_acl(self,client,users,users_index,is_permission,mocker):
+    def test_export_acl(self,client,users,users_index,is_permission):
         class MockTask:
             id = "test_id"
-        mocker.patch("weko_authors.admin.export_all.delay",return_valuc=MockTask)
-        mocker.patch("weko_authors.admin.set_export_status")
+        patch("weko_authors.admin.export_all.delay",return_valuc=MockTask)
+        patch("weko_authors.admin.set_export_status")
         login_user_via_session(client=client, email=users[users_index]['email'])
         url = url_for('authors/export.export')
         res =  client.post(url, data=json.dumps({"isTarget":None}), content_type='application/json')
         assert_role(res,is_permission)
 
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestExportView::test_export -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_export(self,client,users,mocker):
+    def test_export(self,client,users):
         url = url_for('authors/export.export')
-        mocker.patch("weko_authors.admin.set_export_status")
+        patch("weko_authors.admin.set_export_status")
         class MockTask:
             id = "test_id"
-        mocker.patch("weko_authors.admin.export_all.delay",return_value=MockTask)
+        patch("weko_authors.admin.export_all.delay",return_value=MockTask)
         login_user_via_session(client=client, email=users[0]['email'])
         data = {"isTarget":None}
         res = client.post(url, data=json.dumps(data), content_type='application/json')
@@ -450,14 +455,14 @@ class TestExportView():
         assert_role(res,is_permission)
 
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestExportView::test_cancel -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_cancel(self,client,users,mocker):
+    def test_cancel(self,client,users):
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/export.cancel')
-        mocker.patch("weko_authors.admin.revoke")
+        patch("weko_authors.admin.revoke")
         current_cache.set(f"weko_authors_export_status_{users[0]['id']}",{"key":"authors_export_status","task_id":"test_task"})
         current_cache.set(f"weko_authors_export_stop_point_{users[0]['id']}",{"key":"authors_export_stop_point"})
         current_cache.set(f"weko_authors_export_temp_file_path_key_{users[0]['id']}",{"key":"authors_export_temp_file_path_key"})
-        mocker.patch("os.remove")
+        patch("os.remove")
         res = client.post(url)
         assert json.loads(res.data) == {"code":200,"data":{"status":"success"}}
 
@@ -520,10 +525,11 @@ class TestImportView():
             assert_role(res,is_permission)
 
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestImportView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_index(self,client,users,mocker):
+    def test_index(self,client,users):
+        client.application.jinja_env.add_extension("jinja2.ext.do")
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/import.index')
-        mock_render = mocker.patch("weko_authors.admin.ImportView.render",return_value=make_response())
+        mock_render = patch("weko_authors.admin.ImportView.render",return_value=make_response())
 
         res = client.get(url)
         assert res.status_code == 200
@@ -549,17 +555,17 @@ class TestImportView():
         (7, False), # user
         (8, False), # student
     ])
-    def test_is_import_available_acl(self,client,users,users_index,is_permission,mocker):
+    def test_is_import_available_acl(self,client,users,users_index,is_permission):
         login_user_via_session(client=client, email=users[users_index]['email'])
         url = url_for('authors/import.is_import_available')
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"result":"success"})
+        patch("weko_authors.admin.check_is_import_available",return_value={"result":"success"})
         res =  client.get(url)
         assert_role(res,is_permission)
 
-    def test_is_import_available(self,client,users,mocker):
+    def test_is_import_available(self,client,users):
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/import.is_import_available')
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"result":"success"})
+        patch("weko_authors.admin.check_is_import_available",return_value={"result":"success"})
         res =  client.get(url)
         assert json.loads(res.data) == {"result":"success"}
 
@@ -590,7 +596,7 @@ class TestImportView():
         assert_role(res,is_permission)
 
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestImportView::test_check_import_file -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_check_import_file(self,client,users,mocker):
+    def test_check_import_file(self,client,users):
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/import.check_import_file')
 
@@ -598,37 +604,42 @@ class TestImportView():
         res =  client.post(url,json={})
         assert json.loads(res.data) == {"code":1,"error":None,"list_import_data":[],"counts":0,"max_page":1}
 
+        # exist json
+        patch("weko_authors.admin.check_import_data",return_value={"list_import_data":["test_import_data"]})
+        res = client.post(url,json={"filename":"test_file.txt","file":"test1,test2"})
+        assert json.loads(res.data) == {"code":1,"error":None,"list_import_data":["test_import_data"],"counts":0,"max_page":1}
+
         # target == "id_prefix"
-        mocker.patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
+        patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
         res = client.post(url,json={"file_name":"test_file.txt","file":"test1,test2","target":"id_prefix"})
         assert json.loads(res.data) == {"code":1,"error":None,"list_import_data":["test_import_data"],"counts":0,"max_page":1}
 
         # target == "author_db"
-        mocker.patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
-        mocker.patch("weko_authors.admin.check_import_data", return_value={"error":"Internal server error"})
+        patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
+        patch("weko_authors.admin.check_import_data", return_value={"error":"Internal server error"})
         current_cache.set("authors_import_band_check_user_file_path",{"key":"authors_import_band_check_user_file_path"})
-        mocker.patch("os.remove")
+        patch("os.remove")
         res = client.post(url,json={"file_name":"test_file.txt","file":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKAQMAAAC3/F3+AAAAA3NCSVQICAjb4U/gAAAABlBMVEUjHyD///9mY0coAAAACXBIWXMAAAsSAAALEgHS3X78AAAAFnRFWHRDcmVhdGlvbiBUaW1lADAzLzIzLzEysFVRHgAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNXG14zYAAAAWSURBVAiZY/h/gAGIPoPRATCCsMHiAPy6EMmRpJhhAAAAAElFTkSuQmCC","target":"author_db"})
         assert json.loads(res.data) == {"code":1,"error":"Internal server error","list_import_data":None,"counts":None,"max_page":None}
 
         # not band_file_path
-        mocker.patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
-        mocker.patch("weko_authors.admin.check_import_data", return_value={"error":"Internal server error"})
+        patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
+        patch("weko_authors.admin.check_import_data", return_value={"error":"Internal server error"})
         res = client.post(url,json={"file_name":"test_file.txt","file":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKAQMAAAC3/F3+AAAAA3NCSVQICAjb4U/gAAAABlBMVEUjHyD///9mY0coAAAACXBIWXMAAAsSAAALEgHS3X78AAAAFnRFWHRDcmVhdGlvbiBUaW1lADAzLzIzLzEysFVRHgAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNXG14zYAAAAWSURBVAiZY/h/gAGIPoPRATCCsMHiAPy6EMmRpJhhAAAAAElFTkSuQmCC","target":"author_db"})
         assert json.loads(res.data) == {"code":1,"error":"Internal server error","list_import_data":None,"counts":None,"max_page":None}
 
         # target == "dummy"
-        mocker.patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
+        patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
         res = client.post(url,json={"file_name":"test_file.txt","file":"test1,test2","target":"dummy"})
         assert json.loads(res.data) == {"code":1,"error":None,"list_import_data":[],"counts":0,"max_page":1}
 
         # Exception
         mock_logger = MagicMock()
         current_app.logger = mock_logger
-        mocker.patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
-        mocker.patch("weko_authors.admin.check_import_data", return_value={"error":"Internal server error"})
+        patch("weko_authors.admin.check_import_data_for_prefix",return_value={"list_import_data":["test_import_data"]})
+        patch("weko_authors.admin.check_import_data", return_value={"error":"Internal server error"})
         current_cache.set("authors_import_band_check_user_file_path",{"key":"authors_import_band_check_user_file_path"})
-        mocker.patch("os.remove", side_effect=FileNotFoundError)
+        patch("os.remove", side_effect=FileNotFoundError)
         res = client.post(url,json={"file_name":"test_file.txt","file":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKAQMAAAC3/F3+AAAAA3NCSVQICAjb4U/gAAAABlBMVEUjHyD///9mY0coAAAACXBIWXMAAAsSAAALEgHS3X78AAAAFnRFWHRDcmVhdGlvbiBUaW1lADAzLzIzLzEysFVRHgAAABx0RVh0U29mdHdhcmUAQWRvYmUgRmlyZXdvcmtzIENTNXG14zYAAAAWSURBVAiZY/h/gAGIPoPRATCCsMHiAPy6EMmRpJhhAAAAAElFTkSuQmCC","target":"author_db"})
         mock_logger.error.assert_called_once_with("Error deleting {'key': 'authors_import_band_check_user_file_path'}: ")
 
@@ -651,14 +662,14 @@ class TestImportView():
         (7, False), # user
         (8, False), # student
     ])
-    def test_import_authors_acl(self,client,users,users_index,is_permission,mocker):
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":False})
+    def test_import_authors_acl(self,client,users,users_index,is_permission):
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":False})
         login_user_via_session(client=client, email=users[users_index]['email'])
         url = url_for('authors/import.import_authors')
         res =  client.post(url)
         assert_role(res,is_permission)
 # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestImportView::test_import_authors -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_import_authors(self,client,users,mocker):
+    def test_import_authors(self,client,users):
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/import.import_authors')
         class MockTaskGroup:
@@ -675,7 +686,7 @@ class TestImportView():
                     self.task_id = id
 
         # not is_available
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":False})
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":False})
         res = client.post(url)
         assert json.loads(res.data) == {"is_available":False}
 
@@ -688,8 +699,8 @@ class TestImportView():
                 {"pk_id": "test_id1", "scheme": "GRID", "name": "name1"},
             ],
         }
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
-        mocker.patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
+        patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
         res = client.post(url, data=json.dumps(data), content_type='application/json')
         test = {
             "status": "success",
@@ -717,8 +728,8 @@ class TestImportView():
                 {"pk_id": "test_id1", "scheme": "GRID", "name": "name1"},
             ],
         }
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
-        mocker.patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
+        patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
         res = client.post(url, data=json.dumps(data), content_type='application/json')
         test = {
             "status": "success",
@@ -746,19 +757,19 @@ class TestImportView():
                 {"pk_id": "test_id1", "scheme": "GRID", "name": "name1"},
             ],
         }
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_OVER_MAX_FILE_PATH_KEY"],
                           {"key":"cache_result_over_max_file_path_key"})
-        mocker.patch("os.remove")
+        patch("os.remove")
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_FILE_PATH_KEY"],
                           {"key":"authors_import_result_file_path"})
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_SUMMARY_KEY"],
                           {"key":"result_summary_key"})
-        mocker.patch("weko_authors.admin.prepare_import_data",return_value=([
+        patch("weko_authors.admin.prepare_import_data",return_value=([
                 {"pk_id": "test_id0", "weko_id": "1000"},
                 {"pk_id": "test_id1", "weko_id": "1001"},
             ], 1, 1))
-        mocker.patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
+        patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
         res = client.post(url, data=json.dumps(data), content_type='application/json')
         test = {
             "status": "success",
@@ -794,7 +805,7 @@ class TestImportView():
                 {"pk_id": "test_id1", "scheme": "GRID", "name": "name1"},
             ],
         }
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
         res = client.post(url, data=json.dumps(data), content_type='application/json')
         assert res.status_code == 200
         assert json.loads(res.data) == {'status': 'fail', 'message': 'Invalid target'}
@@ -808,19 +819,19 @@ class TestImportView():
                 {"pk_id": "test_id1", "scheme": "GRID", "name": "name1"},
             ],
         }
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_OVER_MAX_FILE_PATH_KEY"],None)
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_FILE_PATH_KEY"], None)
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_SUMMARY_KEY"],None)
-        mocker.patch("weko_authors.admin.prepare_import_data",return_value=([
+        patch("weko_authors.admin.prepare_import_data",return_value=([
                 {"pk_id": "test_id0", "weko_id": "1000"},
                 {"pk_id": "test_id1", "weko_id": "1001"},
             ], 1, 2000))
-        mocker.patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
+        patch("weko_authors.admin.group.apply_async",return_value=MockTaskGroup())
         mock_task = MagicMock()
         mock_task.id = 'mocked_task_id'
-        mocker.patch("weko_authors.admin.import_author_over_max.delay",return_value=mock_task)
-        mocker.patch("weko_authors.admin.update_cache_data",return_value=None)
+        patch("weko_authors.admin.import_author_over_max.delay",return_value=mock_task)
+        patch("weko_authors.admin.update_cache_data",return_value=None)
         res = client.post(url, data=json.dumps(data), content_type='application/json')
         test = {
             "status": "success",
@@ -859,10 +870,10 @@ class TestImportView():
         }
         mock_logger_error = MagicMock()
         current_app.logger.error = mock_logger_error
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_OVER_MAX_FILE_PATH_KEY"],
                           {"key": "cache_result_over_max_file_path_key"})
-        mocker.patch("os.remove", side_effect=FileNotFoundError)
+        patch("os.remove", side_effect=FileNotFoundError)
         client.post(url, data=json.dumps(data), content_type='application/json')
         mock_logger_error.assert_called_once_with("Error deleting {'key': 'cache_result_over_max_file_path_key'}: ")
 
@@ -877,10 +888,10 @@ class TestImportView():
         }
         mock_logger_error = MagicMock()
         current_app.logger.error = mock_logger_error
-        mocker.patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
+        patch("weko_authors.admin.check_is_import_available",return_value={"is_available":True})
         current_cache.set(current_app.config["WEKO_AUTHORS_IMPORT_CACHE_RESULT_FILE_PATH_KEY"],
                 {"key": "authors_import_result_file_path"})
-        mocker.patch("os.remove", side_effect=FileNotFoundError)
+        patch("os.remove", side_effect=FileNotFoundError)
         client.post(url, data=json.dumps(data), content_type='application/json')
         mock_logger_error.assert_called_once_with("Error deleting {'key': 'authors_import_result_file_path'}: ")
 
@@ -909,7 +920,7 @@ class TestImportView():
         res =  client.post(url)
         assert_role(res,is_permission)
     # .tox/c1/bin/pytest --cov=weko_authors tests/test_admin.py::TestImportView::test_check_import_status -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-authors/.tox/c1/tmp
-    def test_check_import_status(self,client,users,mocker):
+    def test_check_import_status(self,client,users):
         login_user_via_session(client=client, email=users[0]['email'])
         url = url_for('authors/import.check_import_status')
 
@@ -970,7 +981,7 @@ class TestImportView():
         }
         current_cache.set("authors_import_over_max_task",{"key":"authors_import_over_max_task"})
         current_cache.set("result_summary_key",{"success_count":5,"failure_count":5})
-        mocker.patch("weko_authors.admin.import_author_over_max.AsyncResult",side_effect=lambda x:[task for task in tasks][0])
+        patch("weko_authors.admin.import_author_over_max.AsyncResult",side_effect=lambda x:[task for task in tasks][0])
         res = client.post(url,json=data)
         assert res.status_code == 200
         assert json.loads(res.data) == test
@@ -996,7 +1007,7 @@ class TestImportView():
         failure_tasks = list()
         failure_tasks.append(MockAsyncResult(1,"2022-10-01 01:02:03","2022-10-01 02:03:04","FAILURE","error_id"))
         failure_tasks.append(MockAsyncResult(2,None,None,"RUNNING","not_error"))
-        mocker.patch("weko_authors.admin.ImportView.get_task",side_effect=lambda target, task_id:[task for task in failure_tasks if task.id == task_id][0])
+        patch("weko_authors.admin.ImportView.get_task",side_effect=lambda target, task_id:[task for task in failure_tasks if task.id == task_id][0])
         res = client.post(url,json=data)
         assert res.status_code == 200
         assert json.loads(res.data) == test
@@ -1022,7 +1033,7 @@ class TestImportView():
                 },
             ],
         }
-        mocker.patch("weko_authors.admin.ImportView.get_task",side_effect=lambda target, task_id:[task for task in tasks if task.id == task_id][0])
+        patch("weko_authors.admin.ImportView.get_task",side_effect=lambda target, task_id:[task for task in tasks if task.id == task_id][0])
         current_cache.set("authors_import_over_max_task",None)
         current_cache.set("result_summary_key",None)
         res = client.post(url,json=data)
@@ -1057,7 +1068,7 @@ class TestImportView():
         }
         current_cache.set("authors_import_over_max_task",{"key":"authors_import_over_max_task"})
         current_cache.set("result_summary_key",{"success_count":5,"failure_count":5})
-        mocker.patch("weko_authors.admin.import_author_over_max.AsyncResult",side_effect=lambda x:[task for task in tasks][1])
+        patch("weko_authors.admin.import_author_over_max.AsyncResult",side_effect=lambda x:[task for task in tasks][1])
         res = client.post(url,json=data)
         assert res.status_code == 200
         assert json.loads(res.data) == test

@@ -21,9 +21,28 @@ SMALLEST_JPEG_B64 = """\
 /9j/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8Q
 EBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=
 """
+from invenio_accounts.models import Role
+
+# create mock data
+@pytest.fixture
+def mock_role(db):
+    # Delete the existing "Contributor" role
+    existing_role = db.session.query(Role).filter_by(name="Contributor").first()
+    if existing_role:
+        db.session.delete(existing_role)
+        db.session.commit()
+
+    # Create a new instance of the Role
+    role = Role(id="1", name="Contributor")
+    
+    # Add to the DB session
+    db.session.add(role)
+    db.session.commit()
+
+    return role
 
 @pytest.fixture()
-def setup_view_community(app,db,users):
+def setup_view_community(app,db,users,mock_role):
     sysadmin = users[2]["obj"]
     test_index = Index(
             index_name="testIndexOne",
@@ -442,6 +461,40 @@ class TestCommunityModelView():
             login_user_via_session(client,email=user.email)
             # post
             # first character is not alphabet,"-","_"
+            data = {
+                "id": "111",
+                "owner": 1,
+                "index": 11,
+                "title": "Test comm after",
+                "description": "this is description of community1."
+            }
+            res = client.post(url,data=data)
+            assert res.status_code == 200
+            assert "The first character cannot be a number or special character. It should be an alphabet character, &#34;-&#34; or &#34;_&#34;" in str(res.data)
+
+            # first character is alphabet,"-","_"  negative number
+            data = {
+                "id": "-1",
+                "owner": 1,
+                "index": 11,
+                "title": "Test comm after",
+                "description": "this is description of community1."
+            }
+            res = client.post(url,data=data)
+            assert res.status_code == 200
+            assert "Cannot set negative number to ID." in str(res.data)
+
+            # special character
+            data = {
+                "id": "a-1^^^",
+                "owner": 1,
+                "index": 11,
+                "title": "Test comm after",
+                "description": "this is description of community1."
+            }
+            res = client.post(url,data=data)
+            assert res.status_code == 200
+            assert "Don&#39;t use space or special character except `-` and `_`." in str(res.data)
 
             # correct_data
             file1 = werkzeug.datastructures.FileStorage(stream=BytesIO(base64.b64decode(SMALLEST_JPEG_B64)),

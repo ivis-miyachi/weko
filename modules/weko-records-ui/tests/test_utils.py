@@ -75,16 +75,15 @@ from fpdf import FPDF
 from flask import json, current_app
 from flask_babelex import to_utc
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
-from mock import patch
-from weko_deposit.api import WekoRecord, WekoDeposit
+from unittest.mock import patch
+from weko_deposit.api import WekoRecord
 from weko_records_ui.models import (
     AccessStatus, FileOnetimeDownload, FileSecretDownload, FileUrlDownloadLog,
     UrlType
 )
-from weko_records.api import ItemTypes,Mapping
 from werkzeug.exceptions import NotFound
 from weko_admin.models import AdminSettings
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 import datetime
 from werkzeug.exceptions import Gone, NotFound
 

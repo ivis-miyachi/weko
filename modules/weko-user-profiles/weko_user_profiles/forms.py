@@ -23,7 +23,7 @@
 import re
 
 from flask import current_app
-from flask_babelex import lazy_gettext as _
+from flask_babel import lazy_gettext as _
 from flask_login import current_user
 from flask_security.forms import email_required, email_validator, \
     unique_user_email

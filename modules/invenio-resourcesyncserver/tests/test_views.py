@@ -4,7 +4,7 @@ import datetime
 from lxml import etree
 from flask import current_app, make_response, request
 from flask_login import current_user
-from mock import patch, MagicMock
+from unittest.mock import patch, MagicMock
 from werkzeug.local import LocalProxy
 
 from invenio_resourcesyncserver.api import ResourceListHandler, ChangeListHandler
@@ -50,7 +50,7 @@ def sample_ResourceListHandler():
     test.created = "test"
     test.updated = "test"
     test.index = "test"
-    
+
     return test
 
 
@@ -77,7 +77,7 @@ def sample_ChangeListHandler(key):
             test = ChangeListHandler(
                 change_tracking_state=["test"]
             )
-        
+
         test.id = "test"
         test.status = "test"
         test.repository_id = "Root Index"
@@ -91,7 +91,7 @@ def sample_ChangeListHandler(key):
         test.interval_by_date = 2
 
         return test
-    
+
     return _func(key)
 
 
@@ -99,16 +99,6 @@ def sample_ChangeListHandler(key):
 # @pytest.mark.parametrize('id, status_code', user_results)
 # @pytest.mark.parametrize('status', [True, False])
 def test_resource_list(client_api, users, indices):
-    # login_user_via_session(client=client_api, email=users[3]["email"])
-
-    # res = client_api.post(
-    #     "/resync/<index_id>/resourcelist.xml",
-    #     data=json.dumps({}),
-    #     content_type="application/json"
-    # )
-
-    # assert res.status_code == status_code
-
     test = sample_ResourceListHandler()
     index_id = 33
 
@@ -186,7 +176,7 @@ def test_file_content(i18n_app, indices):
 
     with patch("invenio_resourcesyncserver.api.ResourceListHandler.get_resource_by_repository_id", return_value=data1):
         assert file_content(index_id=index_id, record_id=record_id) is not None
-    
+
     # Exception coverage
     # file_content(index_id=index_id, record_id=record_id) is not None
 
@@ -228,7 +218,7 @@ def test_change_list_index(i18n_app, indices):
         data = MagicMock()
         data.get_change_list_index = get_change_list_index
         return data
-        
+
     data1.get_change_list_by_repo_id = get_change_list_by_repo_id
 
     with patch("invenio_resourcesyncserver.api.ChangeListHandler.get_change_list_by_repo_id", return_value=data1):
@@ -251,7 +241,7 @@ def test_change_list(i18n_app, indices):
         data = MagicMock()
         data.get_change_list_content_xml = get_change_list_content_xml
         return data
-        
+
     data1.get_change_list_by_repo_id = get_change_list_by_repo_id
 
     with patch("invenio_resourcesyncserver.api.ChangeListHandler.get_change_list_by_repo_id", return_value=data1):
@@ -274,7 +264,7 @@ def test_change_dump_index(i18n_app, indices):
         data = MagicMock()
         data.get_change_dump_index = get_change_list_content_xml
         return data
-        
+
     data1.get_change_list_by_repo_id = get_change_list_by_repo_id
 
     with patch("invenio_resourcesyncserver.api.ChangeListHandler.get_change_list_by_repo_id", return_value=data1):
@@ -297,7 +287,7 @@ def test_change_dump(i18n_app, indices):
         data = MagicMock()
         data.get_change_dump_xml = get_change_dump_xml
         return data
-        
+
     data1.get_change_list_by_repo_id = get_change_list_by_repo_id
 
     with patch("invenio_resourcesyncserver.api.ChangeListHandler.get_change_list_by_repo_id", return_value=data1):
@@ -320,7 +310,7 @@ def test_change_dump_manifest(i18n_app, indices):
         data = MagicMock()
         data.get_change_dump_manifest_xml = get_change_dump_manifest_xml
         return data
-        
+
     data1.get_change_list_by_repo_id = get_change_list_by_repo_id
 
     with patch("invenio_resourcesyncserver.api.ChangeListHandler.get_change_list_by_repo_id", return_value=data1):
@@ -343,7 +333,7 @@ def test_change_dump_content(i18n_app, indices):
         data = MagicMock()
         data.get_record_content_file = get_record_content_file
         return data
-        
+
     data1.get_change_list_by_repo_id = get_change_list_by_repo_id
 
     with patch("invenio_resourcesyncserver.api.ChangeListHandler.get_change_list_by_repo_id", return_value=data1):

@@ -27,7 +27,7 @@ import tempfile
 import pytest
 from flask import Flask, current_app
 from flask_admin import Admin
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_mail import Mail
 from flask_menu import Menu
 from sqlalchemy_utils.functions import create_database, database_exists
@@ -35,12 +35,13 @@ from sqlalchemy_utils.functions import create_database, database_exists
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionUsers,ActionRoles
 from invenio_accounts import InvenioAccounts
-from invenio_accounts.views import blueprint as accounts_blueprint
+#from invenio_accounts.views import blueprint as accounts_blueprint
 from invenio_accounts.models import User, Role
 from invenio_accounts.testutils import create_test_user
 from invenio_db import InvenioDB
 from invenio_db import db as db_
 from invenio_communities.models import Community
+from invenio_i18n import InvenioI18N
 
 from weko_admin.models import AdminSettings
 from weko_index_tree.models import Index
@@ -108,10 +109,11 @@ def base_app(instance_path):
     InvenioDB(app_)
     InvenioAccess(app_)
     InvenioAccounts(app_)
+    InvenioI18N(app_)
     WekoUserProfiles(app_)
     WekoNotifications(app_)
 
-    app_.register_blueprint(accounts_blueprint)
+    # app_.register_blueprint(accounts_blueprint)
 
     yield app_
 
@@ -144,7 +146,6 @@ def req_context(app):
 def register_bp():
     current_app.register_blueprint(blueprint_ui_init)
     current_app.register_blueprint(blueprint_api_init)
-    current_app.register_blueprint(blueprint_profile)
 
 @pytest.yield_fixture
 def db(app):

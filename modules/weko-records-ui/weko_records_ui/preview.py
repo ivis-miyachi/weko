@@ -125,7 +125,7 @@ def zip_preview(file):
         tree=lst,
         limit_reached=limit_reached,
         error=error,
-        js_bundles=current_previewer.js_bundles + ['previewer_fullscreen_js'],
+        js_bundles=current_previewer.js_bundles + ['fullscreen_js.js'],
         css_bundles=current_previewer.css_bundles,
     )
 

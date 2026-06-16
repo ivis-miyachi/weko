@@ -26,7 +26,7 @@
 {{ all_modal() }}
 
 {%- block javascript %}
-  {% assets "weko_records_ui_file_action_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
+  {{ webpack['records_ui_file_action_js.js']}}
 {%- endblock javascript %}
 
 {% from "weko_records_ui/item_detail.html" import output_item_detail with context %}
@@ -115,7 +115,7 @@
                           {%- if not file.groupsprice and not access_permission and file.accessrole == 'open_login' -%}
                             {%- set billing_file_class = "" -%}
                           {%- elif is_billing_file or file.groupsprice -%}
-                            {%- if not session['user_id'] -%}
+                            {%- if not session['_user_id'] -%}
                               {%- set file_url = url_for_security('login', next=request.path) -%}
                               {%- set billing_file_class = "" -%}
                             {%- elif billing_file_permission -%}

@@ -22,12 +22,12 @@
 
 {% block css %}
 {{ super() }}
-{% assets "weko_theme_css_buttons" %}<link href="{{ ASSET_URL }}" rel="stylesheet">{% endassets %}
-<link href="{{ url_for('static', filename='css/weko_admin/quill.snow.css') }}" rel="stylesheet">
+{{ webpack['theme-css-buttons.css']}}
+<link href="/assets/css/weko_admin/quill.snow.css" rel="stylesheet">
   <!--<link href="//cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css" rel="stylesheet">-->
   <!--<link href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/monokai-sublime.min.css" rel="stylesheet">-->
-  <link href="{{ url_for('static', filename='css/KaTeX/katex.min.css') }}" rel="stylesheet">
-  <link href="{{ url_for('static', filename='css/highlight.js/monokai-sublime.min.css') }}" rel="stylesheet">
+  <link href="/assets/css/KaTeX/katex.min.css" rel="stylesheet">
+  <link href="/assets/css/highlight.js/monokai-sublime.min.css" rel="stylesheet">
 <style>
   .fileupload-buttonbar .btn,
   .fileupload-buttonbar .toggle {
@@ -80,7 +80,7 @@
           <div class="panel-body" id="color_setting">
             <div class="row">
               <div class="col-sm-10">
-                <form action={{url_for('stylesetting.index')}} method="POST">
+                <form action="{{url_for('stylesetting.index')}}" method="POST">
                   <div class="panel panel-info">
                     <div class="panel-heading">
                       <div class="pull-right">
@@ -115,7 +115,7 @@
 {% block tail %}
 <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script src="//cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js"></script>
-<script src="{{ url_for('static', filename='js/weko_admin/quill.min.js') }}"></script>
+<script src="/assets/js/weko_admin/quill.min.js"></script>
 
 <script>
  $(document).ready(function() {
@@ -154,7 +154,7 @@
       content = $('#editor-container-header').find('.ql-editor').prop('outerHTML');
       $.ajax({
         type: 'POST',
-        url: '{{url_for('stylesetting.upload_editor')}}',
+        url: "{{ url_for('stylesetting.upload_editor') }}",
         contentType: 'application/json; charset=UTF-8',
         data: JSON.stringify({'content': content, 'temp': 'header', 'isEmpty': isEmpty}),
         success: function(data){
@@ -168,7 +168,7 @@
       content = $('#editor-container-footer').find('.ql-editor').prop('outerHTML');
       $.ajax({
         type: 'POST',
-        url: '{{url_for('stylesetting.upload_editor')}}',
+        url: "{{url_for('stylesetting.upload_editor')}}",
         contentType: 'application/json; charset=UTF-8',
         data: JSON.stringify({'content': content, 'temp': 'footer', 'isEmpty': isEmpty}),
         success: function(data){

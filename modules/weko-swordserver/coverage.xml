@@ -8,14 +8,13 @@
 	<packages>
 		<package branch-rate="0.9839" complexity="0" line-rate="0.9982" name=".">
 			<classes>
-				<class branch-rate="1" complexity="0" filename="__init__.py" line-rate="1" name="__init__.py">
+				<class name="__init__.py" filename="__init__.py" complexity="0" line-rate="1" branch-rate="1">
 					<methods/>
 					<lines>
-						<line hits="1" number="8"/>
-						<line hits="1" number="10"/>
-						<line hits="1" number="12"/>
-						<line hits="1" number="13"/>
-						<line hits="1" number="15"/>
+						<line number="10" hits="1"/>
+						<line number="12" hits="1"/>
+						<line number="13" hits="1"/>
+						<line number="15" hits="1"/>
 					</lines>
 				</class>
 				<class branch-rate="1" complexity="0" filename="api.py" line-rate="1" name="api.py">
@@ -284,27 +283,26 @@
 						<line hits="1" number="58"/>
 					</lines>
 				</class>
-				<class branch-rate="1" complexity="0" filename="ext.py" line-rate="1" name="ext.py">
+				<class name="ext.py" filename="ext.py" complexity="0" line-rate="1" branch-rate="1">
 					<methods/>
 					<lines>
-						<line hits="1" number="8"/>
-						<line hits="1" number="10"/>
-						<line hits="1" number="12"/>
-						<line hits="1" number="14"/>
-						<line branch="true" condition-coverage="100% (2/2)" hits="1" number="17"/>
-						<line hits="1" number="20"/>
-						<line hits="1" number="25"/>
-						<line branch="true" condition-coverage="100% (2/2)" hits="1" number="26"/>
-						<line hits="1" number="27"/>
-						<line hits="1" number="29"/>
-						<line hits="1" number="31"/>
-						<line hits="1" number="32"/>
-						<line hits="1" number="34"/>
-						<line branch="true" condition-coverage="100% (2/2)" hits="1" number="37"/>
-						<line hits="1" number="38"/>
-						<line branch="true" condition-coverage="100% (2/2)" hits="1" number="42"/>
-						<line branch="true" condition-coverage="100% (2/2)" hits="1" number="43"/>
-						<line hits="1" number="44"/>
+						<line number="10" hits="1"/>
+						<line number="12" hits="1"/>
+						<line number="14" hits="1"/>
+						<line number="17" hits="1"/>
+						<line number="20" hits="1"/>
+						<line number="25" hits="1"/>
+						<line number="26" hits="1" branch="true" condition-coverage="100% (2/2)"/>
+						<line number="27" hits="1"/>
+						<line number="29" hits="1"/>
+						<line number="31" hits="1"/>
+						<line number="32" hits="1"/>
+						<line number="34" hits="1"/>
+						<line number="37" hits="1" branch="true" condition-coverage="100% (2/2)"/>
+						<line number="38" hits="1"/>
+						<line number="42" hits="1" branch="true" condition-coverage="100% (2/2)"/>
+						<line number="43" hits="1" branch="true" condition-coverage="100% (2/2)"/>
+						<line number="44" hits="1"/>
 					</lines>
 				</class>
 				<class branch-rate="1" complexity="0" filename="mapper.py" line-rate="1" name="mapper.py">
@@ -932,9 +930,8 @@
 				<class branch-rate="1" complexity="0" filename="version.py" line-rate="1" name="version.py">
 					<methods/>
 					<lines>
-						<line hits="1" number="8"/>
-						<line hits="1" number="14"/>
-						<line hits="1" number="16"/>
+						<line number="14" hits="1"/>
+						<line number="16" hits="1"/>
 					</lines>
 				</class>
 				<class branch-rate="0.9615" complexity="0" filename="views.py" line-rate="1" name="views.py">

@@ -21,7 +21,7 @@
 """Module tests."""
 import copy
 import json
-from mock import patch
+from unittest.mock import patch
 from flask import Blueprint, Response, json, url_for,current_app
 import pytest
 from pytest import fail
@@ -33,7 +33,7 @@ from werkzeug.http import generate_etag
 
 from invenio_deposit.utils import check_oauth2_scope_write, \
     check_oauth2_scope_write_elasticsearch
-from invenio_records_rest.utils import check_elasticsearch
+from invenio_records_rest.utils import check_search
 from sqlalchemy.exc import SQLAlchemyError
 from weko_records_ui.errors import AvailableFilesNotFoundRESTError, FilesNotFoundRESTError, InvalidRequestError
 from weko_records_ui.rest import (
@@ -81,7 +81,7 @@ endpoints = {
         'default_media_type': 'application/json',
         'links_factory_imp': 'invenio_deposit.links:deposit_links_factory',
         'create_permission_factory_imp': check_oauth2_scope_write,
-        'read_permission_factory_imp': check_elasticsearch,
+        'read_permission_factory_imp': check_search,
         'update_permission_factory_imp':
             check_oauth2_scope_write_elasticsearch,
         'delete_permission_factory_imp':
@@ -269,7 +269,7 @@ def test_GetFileTerms_get_v1(app, client, db, make_record_need_restricted_access
     headers_user = oauth_headers[6]                     # OAuth token : user (activity_scope)
     headers_not_login = oauth_headers[3]                # No OAuth token : not login
     headers_user_no_activity_scope = oauth_headers[2]   # OAuth token : user (item_scope)
-    
+
     # WEKO_RECORDS_UI_RESTRICTED_API = False : 403 error
     pid_value = 12
     file_name = "dummy.txt"
@@ -382,8 +382,8 @@ def test_FileApplication_post_v1(app, client, db, workflows_restricted, make_rec
     headers_user = oauth_headers[6]                     # OAuth token : user (activity_scope)
     headers_not_login = oauth_headers[3]                # No OAuth token : not login
     headers_user_no_activity_scope = oauth_headers[2]   # OAuth token : user (item_scope)
-    
-    
+
+
     # WEKO_RECORDS_UI_RESTRICTED_API = False : 403 error
     pid_value = 12
     file_name = "dummy.txt"
@@ -1261,14 +1261,15 @@ def test_WekoFilesGet_error(app, records):
 
 
 # .tox/c1/bin/pytest --cov=weko_records_ui tests/test_rest.py::test_WekoFileListGetAll -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-search-ui/.tox/c1/tmp
-def test_WekoFileListGetAll(app, mocker, records):
+def test_WekoFileListGetAll(app, records):
+    app.register_blueprint(create_blueprint(app.config['WEKO_RECORDS_UI_CITES_REST_ENDPOINTS']))
     with app.test_client() as client:
         with patch('weko_records_ui.fd.file_list_ui', return_value=Response(status=200)):
             # 1 GET request
             res = client.get('/v1/records/1/files/all')
             assert res.status_code == 200
 
-    test_mock = mocker.patch('weko_records_ui.fd.file_list_ui', return_value=Response(status=200))
+    test_mock = patch('weko_records_ui.fd.file_list_ui', return_value=Response(status=200))
     # 2 Exist thumbnail
     url = '/v1/records/7/files/all'
     res = client.get(url)
@@ -1330,7 +1331,8 @@ def test_WekoFileListGetAll_error(app, records):
 
 
 # .tox/c1/bin/pytest --cov=weko_records_ui tests/test_rest.py::test_WekoFileListGetSelected -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-search-ui/.tox/c1/tmp
-def test_WekoFileListGetSelected(app, mocker, records):
+def test_WekoFileListGetSelected(app, records):
+    app.register_blueprint(create_blueprint(app.config['WEKO_RECORDS_UI_CITES_REST_ENDPOINTS']))
     with app.test_client() as client:
         with patch('weko_records_ui.fd.file_list_ui', return_value=Response(status=200)):
             # 1 POST request

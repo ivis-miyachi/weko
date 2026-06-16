@@ -12,14 +12,17 @@ import uuid
 import pytest
 
 from invenio_accounts.testutils import login_user_via_session
+from invenio_stats import current_stats
 from invenio_stats.views import QueryFileStatsCount, dbsession_clean
 from flask import url_for
+
 from mock import patch
 
 CONTRIBUTOR = 0
 REPO_ADMIN = 1
 SYSTEM_ADMIN = 2
 COM_ADMIN = 3
+
 
 # class WekoQuery(ContentNegotiatedMethodView):
 
@@ -29,10 +32,10 @@ def test_stats_query_resource_guest(client, db, query_entrypoints,
                               role_users, custom_permission_factory,
                               sample_histogram_query_data):
     """Test post request to stats API."""
-    headers = [('Content-Type', 'application/json'),
-                ('Accept', 'application/json')]
+    headers = [("Content-Type", "application/json"),
+                ("Accept", "application/json")]
     resp = client.post(
-        url_for('invenio_stats.stat_query'),
+        url_for("invenio_stats.stat_query"),
         headers=headers,
         data=json.dumps(sample_histogram_query_data))
     assert resp.status_code==401
@@ -41,11 +44,11 @@ def test_stats_query_resource_guest(client, db, query_entrypoints,
 def test_stats_query_resource_com(client, db, query_entrypoints,
                               role_users, custom_permission_factory,
                               sample_histogram_query_data):
-    headers = [('Content-Type', 'application/json'),
-                ('Accept', 'application/json')]
+    headers = [("Content-Type", "application/json"),
+                ("Accept", "application/json")]
     login_user_via_session(client=client, email=role_users[COM_ADMIN]["email"])
     resp = client.post(
-        url_for('invenio_stats.stat_query'),
+        url_for("invenio_stats.stat_query"),
         headers=headers,
         data=json.dumps(sample_histogram_query_data))
     assert resp.status_code==200
@@ -67,31 +70,31 @@ def test_stats_query_resource_contributor(client, db, query_entrypoints,
 def test_stats_query_resource_admin(client, db, es, query_entrypoints,
                               role_users, custom_permission_factory,
                               sample_histogram_query_data):
-    headers = [('Content-Type', 'application/json'),
-                ('Accept', 'application/json')]
+    headers = [("Content-Type", "application/json"),
+                ("Accept", "application/json")]
     login_user_via_session(client=client, email=role_users[SYSTEM_ADMIN]["email"])
     resp = client.post(
-        url_for('invenio_stats.stat_query'),
+        url_for("invenio_stats.stat_query"),
         headers=headers,
         data=json.dumps(sample_histogram_query_data))
     assert resp.status_code==200
 
     resp = client.post(
-        url_for('invenio_stats.stat_query'),
+        url_for("invenio_stats.stat_query"),
         headers=headers,
         data=json.dumps(None))
     assert resp.status_code==200
 
-    sample_histogram_query_data['mystat']['stat'] = 'test-query'
+    sample_histogram_query_data["mystat"]["stat"] = "test-query"
     resp = client.post(
-        url_for('invenio_stats.stat_query'),
+        url_for("invenio_stats.stat_query"),
         headers=headers,
         data=json.dumps(sample_histogram_query_data))
     assert resp.status_code==400
 
-    sample_histogram_query_data['mystat'] = None
+    sample_histogram_query_data["mystat"] = None
     resp = client.post(
-        url_for('invenio_stats.stat_query'),
+        url_for("invenio_stats.stat_query"),
         headers=headers,
         data=json.dumps(sample_histogram_query_data))
     assert resp.status_code==400
@@ -100,58 +103,62 @@ def test_stats_query_resource_admin(client, db, es, query_entrypoints,
 def test_stats_query_resource_error(client, db, query_entrypoints,
                               role_users, custom_permission_factory,
                               sample_histogram_query_data):
-    headers = [('Content-Type', 'application/json'),
-                ('Accept', 'application/json')]
+    headers = [("Content-Type", "application/json"),
+                ("Accept", "application/json")]
     login_user_via_session(client=client, email=role_users[SYSTEM_ADMIN]["email"])
     resp = client.post(
-        url_for('invenio_stats.stat_query'),
+        url_for("invenio_stats.stat_query"),
         headers=headers,
         data=json.dumps(sample_histogram_query_data))
     assert resp.status_code==200
 
     with patch("invenio_stats.queries.ESDateHistogramQuery.run", side_effect=ValueError("test key error")):
         resp = client.post(
-            url_for('invenio_stats.stat_query'),
+            url_for("invenio_stats.stat_query"),
             headers=headers,
             data=json.dumps(sample_histogram_query_data))
         assert resp.status_code==400
 
 
-class mockPIDVersioning:
-    class mockChild:
-        def __init__(self, child):
-            self.child = child
-            pass
-
+class MockPIDNodeVersioning:
+    class MockChild:
+        def __init__(self, object_uuid):
+            self.object_uuid = object_uuid
+            
         def all(self):
-            return [self.child]
-
-    def __init__(self, child):
-        self.exists = True
-        self.children = self.mockChild(child)
-        pass
+            return [self]
+    
+    class MockParents:
+        def one_or_none(self):
+            return None
+            
+    def __init__(self, pid):
+        self.pid = pid
+        self.children = self.MockChild(pid.object_uuid)
+        self.parents = self.MockParents()
 
 # class QueryRecordViewCount(WekoQuery):
 # .tox/c1/bin/pytest --cov=invenio_stats tests/test_views.py::test_query_record_view_count -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/invenio-stats/.tox/c1/tmp
-def test_query_record_view_count(client, db, es, records):
+def test_query_record_view_count(client_1, db, es, records):
+    client = client_1
     _uuid = str(records[0][0].object_uuid)
 
     # get
     res = client.get(
-        url_for('invenio_stats.get_record_view_count', record_id=_uuid))
+        url_for("invenio_stats.get_record_view_count", record_id=_uuid))
     assert res.status_code==200
 
     # post
-    _data1 = {'date': 'total'}
-    _data2 = {'date': '2022-09'}
-    headers = [('Content-Type', 'application/json'), ('Accept', 'application/json')]
+    _data1 = {"date": "total"}
+    _data2 = {"date": "2022-09"}
+    headers = [("Content-Type", "application/json"), ("Accept", "application/json")]
     res = client.post(
-        url_for('invenio_stats.get_record_view_count', record_id=_uuid),
+        url_for("invenio_stats.get_record_view_count", record_id=_uuid),
         headers=headers, data=json.dumps(_data1))
     assert res.status_code==200
 
     res = client.post(
-        url_for('invenio_stats.get_record_view_count', record_id=_uuid),
+        url_for("invenio_stats.get_record_view_count", record_id=_uuid),
         headers=headers, data=json.dumps(_data2))
     assert res.status_code==200
 
@@ -168,22 +175,25 @@ def test_query_record_view_count(client, db, es, records):
             }
         ]
     }
-    with patch("invenio_stats.views.PIDVersioning", side_effect=mockPIDVersioning):
-        with patch("invenio_stats.queries.ESTermsQuery.run", return_value=_res_data):
+
+    with patch("invenio_stats.views.PIDNodeVersioning", 
+              side_effect=MockPIDNodeVersioning) as mock_versioning:
+        with patch("invenio_stats.queries.ESTermsQuery.run", 
+                  return_value=_res_data):
             res = client.get(
-                url_for('invenio_stats.get_record_view_count', record_id=_uuid))
-            assert res.status_code==200
+                url_for("invenio_stats.get_record_view_count", record_id=_uuid))
+            assert res.status_code == 200
 
 # .tox/c1/bin/pytest --cov=invenio_stats tests/test_views.py::test_query_record_view_count_error -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/invenio-stats/.tox/c1/tmp
 def test_query_record_view_count_error(client, db, records):
     _uuid = uuid.uuid4()
     res = client.get(
-        url_for('invenio_stats.get_record_view_count', record_id=_uuid))
+        url_for("invenio_stats.get_record_view_count", record_id=_uuid))
     assert res.status_code==200
 
     _uuid = str(records[0][0].object_uuid)
     res = client.get(
-        url_for('invenio_stats.get_record_view_count', record_id=_uuid))
+        url_for("invenio_stats.get_record_view_count", record_id=_uuid))
     assert res.status_code==200
 
     # GET:Invalid uuid
@@ -206,16 +216,17 @@ def test_query_record_view_count_error(client, db, records):
 
 # class QueryFileStatsCount(WekoQuery):
 # .tox/c1/bin/pytest --cov=invenio_stats tests/test_views.py::test_query_file_stats_count -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/invenio-stats/.tox/c1/tmp
-def test_query_file_stats_count(client, db):
+def test_query_file_stats_count(client_1, db):
+    client=client_1
     _uuid = uuid.uuid4()
 
     # get_data
-    res = QueryFileStatsCount.get_data(QueryFileStatsCount, bucket_id=_uuid, file_key='test.pdf', root_file_id=uuid.uuid4())
-    assert res=={'download_total': 0, 'preview_total': 0, 'country_list': []}
+    res = QueryFileStatsCount.get_data(QueryFileStatsCount, bucket_id=_uuid, file_key="test.pdf", root_file_id=uuid.uuid4())
+    assert res=={"download_total": 0, "preview_total": 0, "country_list": []}
 
     # get
     res = client.get(
-        url_for('invenio_stats.get_file_stats_count', bucket_id=_uuid, file_key='test{URL_SLASH}test.pdf'))
+        url_for("invenio_stats.get_file_stats_count", bucket_id=_uuid, file_key="test{URL_SLASH}test.pdf"))
     assert res.status_code==200
 
     _res_data = {
@@ -234,7 +245,7 @@ def test_query_file_stats_count(client, db):
     }
     with patch("invenio_stats.queries.ESWekoFileStatsQuery.run", return_value=_res_data):
         res = client.get(
-            url_for('invenio_stats.get_file_stats_count', bucket_id=_uuid, file_key='test.pdf'))
+            url_for("invenio_stats.get_file_stats_count", bucket_id=_uuid, file_key="test.pdf"))
         assert res.status_code==200
 
     _res_data = {
@@ -249,19 +260,19 @@ def test_query_file_stats_count(client, db):
     }
     with patch("invenio_stats.queries.ESWekoFileStatsQuery.run", return_value=_res_data):
         res = client.get(
-            url_for('invenio_stats.get_file_stats_count', bucket_id=_uuid, file_key='test.pdf'))
+            url_for("invenio_stats.get_file_stats_count", bucket_id=_uuid, file_key="test.pdf"))
         assert res.status_code==200
 
     # post
-    _data1 = {'date': 'total'}
-    _data2 = {'date': '2022-09'}
-    headers = [('Content-Type', 'application/json'), ('Accept', 'application/json')]
+    _data1 = {"date": "total"}
+    _data2 = {"date": "2022-09"}
+    headers = [("Content-Type", "application/json"), ("Accept", "application/json")]
     res = client.post(
-        url_for('invenio_stats.get_file_stats_count', bucket_id=_uuid, file_key='test.pdf'),
+        url_for("invenio_stats.get_file_stats_count", bucket_id=_uuid, file_key="test.pdf"),
         headers=headers, data=json.dumps(_data1))
     assert res.status_code==200
     res = client.post(
-        url_for('invenio_stats.get_file_stats_count', bucket_id=_uuid, file_key='test.pdf'),
+        url_for("invenio_stats.get_file_stats_count", bucket_id=_uuid, file_key="test.pdf"),
         headers=headers, data=json.dumps(_data2))
     assert res.status_code==200
 
@@ -282,13 +293,13 @@ def test_query_item_reg_report(client, role_users, id, status_code):
     # get
     login_user_via_session(client=client, email=role_users[id]["email"])
     res = client.get(
-        url_for('invenio_stats.get_item_registration_report',
-                target_report='1', start_date='0', end_date='0', unit='Year'))
+        url_for("invenio_stats.get_item_registration_report",
+                target_report="1", start_date="0", end_date="0", unit="Year"))
     assert res.status_code==status_code
 
     res = client.get(
-        url_for('invenio_stats.get_item_registration_report',
-                target_report='1', start_date='0', end_date='0', unit='Year', p='A'))
+        url_for("invenio_stats.get_item_registration_report",
+                target_report="1", start_date="0", end_date="0", unit="Year", p="A"))
     assert res.status_code==status_code
 
     res = client.get(
@@ -312,7 +323,7 @@ def test_query_record_view_report(client, role_users, id, status_code):
     # get
     login_user_via_session(client=client, email=role_users[id]["email"])
     res = client.get(
-        url_for('invenio_stats.get_record_view_report', year=2022, month=9))
+        url_for("invenio_stats.get_record_view_report", year=2022, month=9))
     assert res.status_code==status_code
 
     res = client.get(
@@ -336,7 +347,7 @@ def test_query_record_view_per_index_report(client, role_users, id, status_code)
     # get
     login_user_via_session(client=client, email=role_users[id]["email"])
     res = client.get(
-        url_for('invenio_stats.get_record_view_per_index_report', year=2022, month=9))
+        url_for("invenio_stats.get_record_view_per_index_report", year=2022, month=9))
     assert res.status_code==status_code
 
     res = client.get(
@@ -356,12 +367,13 @@ def test_query_record_view_per_index_report(client, role_users, id, status_code)
         (4, 403)
     ],
 )
-def test_query_file_reports(client, role_users, id, status_code):
-    # get
-    login_user_via_session(client=client, email=role_users[id]["email"])
-    res = client.get(
-        url_for('invenio_stats.get_file_reports', event='file_download', year=2022, month=9))
-    assert res.status_code==status_code
+def test_query_file_reports(client, role_users, id, status_code, app):
+    with app.app_context():
+        # get
+        login_user_via_session(client=client, email=role_users[id]["email"])
+        res = client.get(
+            url_for("invenio_stats.get_file_reports", event="file_download", year=2022, month=9))
+        assert res.status_code==status_code
 
     res = client.get(
         url_for('invenio_stats.get_file_reports', event='file_download', year=2022, month=9, repository_id='comm1'))
@@ -370,11 +382,12 @@ def test_query_file_reports(client, role_users, id, status_code):
 
 # class QueryCommonReports(WekoQuery):
 # .tox/c1/bin/pytest --cov=invenio_stats tests/test_views.py::test_query_common_reports -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/invenio-stats/.tox/c1/tmp
-def test_query_common_reports(client):
-    # get
-    res = client.get(
-        url_for('invenio_stats.get_common_report', event='top_page_access', year=2022, month=9))
-    assert res.status_code==200
+def test_query_common_reports(client, app):
+    with app.app_context():
+        # get
+        res = client.get(
+            url_for("invenio_stats.get_common_report", event="top_page_access", year=2022, month=9))
+        assert res.status_code==200
 
     res = client.get(
         url_for('invenio_stats.get_common_report', event='top_page_access', year=2022, month=9, repository_id='comm1'))
@@ -395,29 +408,31 @@ def test_query_common_reports(client):
 )
 def test_query_celery_task_report(client, role_users, id, status_code):
     # get
-    login_user_via_session(client=client, email=role_users[id]["email"])
-    res = client.get(
-        url_for('invenio_stats.get_celery_task_report', task_name='harvest'))
-    assert res.status_code==status_code
+    with patch("weko_items_ui.views.db.session.remove"):
+        login_user_via_session(client=client, email=role_users[id]["email"])
 
-    _res_data = {
-        "buckets": [
-            {
-                "key": "task1",
-                "field": "test_field1",
-                "buckets": [
-                    {
-                        "key": "task1-1",
-                        "field": "test_field1-1"
-                    }
-                ]
-            }
-        ]
-    }
-    with patch("invenio_stats.queries.ESTermsQuery.run", return_value=_res_data):
         res = client.get(
-            url_for('invenio_stats.get_celery_task_report', task_name='harvest'))
+            url_for("invenio_stats.get_celery_task_report", task_name="harvest"))
         assert res.status_code==status_code
+
+        _res_data = {
+            "buckets": [
+                {
+                    "key": "task1",
+                    "field": "test_field1",
+                    "buckets": [
+                        {
+                            "key": "task1-1",
+                            "field": "test_field1-1"
+                        }
+                    ]
+                }
+            ]
+        }
+        with patch("invenio_stats.queries.ESTermsQuery.run", return_value=_res_data):
+            res = client.get(
+                url_for("invenio_stats.get_celery_task_report", task_name="harvest"))
+            assert res.status_code==status_code
 
 
 # class QuerySearchReport(ContentNegotiatedMethodView):
@@ -436,7 +451,7 @@ def test_query_search_report(client, role_users, id, status_code):
     # get
     login_user_via_session(client=client, email=role_users[id]["email"])
     res = client.get(
-        url_for('invenio_stats.get_search_report', year=2022, month=9))
+        url_for("invenio_stats.get_search_report", year=2022, month=9))
     assert res.status_code==status_code
 
     res = client.get(
@@ -447,6 +462,7 @@ def test_query_search_report(client, role_users, id, status_code):
 # def dbsession_clean(exception):
 # .tox/c1/bin/pytest --cov=invenio_stats tests/test_views.py::test_dbsession_clean -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/invenio-stats/.tox/c1/tmp
 def test_dbsession_clean(app):
-    with patch("invenio_db.db.session.commit", side_effect=Exception):
-        assert not dbsession_clean(None)
-        assert not dbsession_clean('')
+    with app.app_context():
+        with patch("invenio_db.db.session.commit", side_effect=Exception):
+            assert not dbsession_clean(None)
+            assert not dbsession_clean("")

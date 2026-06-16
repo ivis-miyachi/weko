@@ -5,7 +5,7 @@ from unittest import mock  # python3
 #from unittest.mock import MagicMock
 
 import pytest
-from mock import patch
+from unittest.mock import patch
 from sqlalchemy.exc import IntegrityError
 
 from weko_records_ui.models import (AccessStatus, FileUrlDownloadLog,
@@ -408,7 +408,7 @@ class TestFileSecretDownload:
 @pytest.mark.skip(reason="'from sqlalchemy.dialects.postgresql import INTERVAL' can't tests on SQLite.")
 def test_find_downloadable_only(app,db):
     # 35
-    user_mail ='aaa@example.org' 
+    user_mail ='aaa@example.org'
     record_id=1
     file_name="text.txt"
     created=datetime.now() - timedelta(2)

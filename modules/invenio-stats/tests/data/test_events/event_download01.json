@@ -1,5 +1,5 @@
 {
-    "timestamp": "2024-01-31T01:01:01",
+    "timestamp": "2024-01-15T01:01:01",
     "bucket_id": "6fd627e8-e7ba-4837-8f75-54286575efda",
     "file_id": "root_file_id_01",
     "root_file_id": "root_file_id_01",
@@ -24,5 +24,6 @@
     "visitor_id": "e80a50a34252bc7ac5d6ea1e2fbc34bbc3eb3d98f92e31749ee06ef1",
     "unique_session_id": "db731d4ba06907cb6ddcc9950e636eee5b2205e71e98af9004e9db2f",
     "unique_id": "be175de4-34bd-3042-982a-1344ad93a8f0",
-    "hostname": "None"
+    "hostname": "None",
+    "event_type": "file-download"
 }

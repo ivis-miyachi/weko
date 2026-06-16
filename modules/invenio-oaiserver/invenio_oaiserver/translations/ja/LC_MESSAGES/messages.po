@@ -1,105 +1,113 @@
 # Japanese translations for invenio-oaiserver.
-# Copyright (C) 2018 CERN
+# Copyright (C) 2026 CERN
 # This file is distributed under the same license as the invenio-oaiserver
 # project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2018.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: invenio-oaiserver 1.0.0\n"
+"Project-Id-Version: invenio-oaiserver 2.2.1\n"
 "Report-Msgid-Bugs-To: info@inveniosoftware.org\n"
-"POT-Creation-Date: 2025-10-03 14:44+0900\n"
-"PO-Revision-Date: 2018-07-06 15:33+0900\n"
+"POT-Creation-Date: 2026-05-25 11:22+0900\n"
+"PO-Revision-Date: 2026-05-25 11:22+0900\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
 "Language-Team: ja <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.5.1\n"
+"Generated-By: Babel 2.17.0\n"
 
-#: invenio_oaiserver/admin.py:47 invenio_oaiserver/admin.py:97
+#: invenio_oaiserver/admin.py:60 invenio_oaiserver/admin.py:109
 msgid "OAI-PMH"
-msgstr "OAI-PMH"
+msgstr ""
 
-#: invenio_oaiserver/admin.py:48
+#: invenio_oaiserver/admin.py:61
 msgid "Sets"
 msgstr "設定"
 
-#: invenio_oaiserver/admin.py:69
+#: invenio_oaiserver/admin.py:81
 msgid "Output Set"
 msgstr "出力"
 
-#: invenio_oaiserver/admin.py:70 invenio_oaiserver/models.py:159
+#: invenio_oaiserver/admin.py:82 invenio_oaiserver/models.py:119
 msgid "Emails"
 msgstr "Eメール"
 
-#: invenio_oaiserver/admin.py:71 invenio_oaiserver/models.py:170
+#: invenio_oaiserver/admin.py:83 invenio_oaiserver/models.py:130
 msgid "Repository Name"
 msgstr "リポジトリ名"
 
-#: invenio_oaiserver/admin.py:72
+#: invenio_oaiserver/admin.py:84
 msgid "Earliest Datastamp"
 msgstr "最古データスタンプ"
 
-#: invenio_oaiserver/admin.py:98
+#: invenio_oaiserver/admin.py:110
 msgid "Identify"
 msgstr "識別"
 
-#: invenio_oaiserver/models.py:37
+#: invenio_oaiserver/models.py:34
 msgid "Identifier"
-msgstr "識別子"
+msgstr ""
 
-#: invenio_oaiserver/models.py:38
+#: invenio_oaiserver/models.py:35
 msgid "Identifier of the set."
-msgstr "セットの識別子です"
+msgstr ""
 
-#: invenio_oaiserver/models.py:46
+#: invenio_oaiserver/models.py:43
 msgid "Long name"
 msgstr "ロングネーム"
 
-#: invenio_oaiserver/models.py:47
+#: invenio_oaiserver/models.py:44
 msgid "Long name of the set."
 msgstr "セットのロングネームです"
 
-#: invenio_oaiserver/models.py:57
+#: invenio_oaiserver/models.py:54
 msgid "Description"
 msgstr "説明"
 
-#: invenio_oaiserver/models.py:58
+#: invenio_oaiserver/models.py:55
 msgid "Description of the set."
 msgstr "セットの説明です."
 
-#: invenio_oaiserver/models.py:67
+#: invenio_oaiserver/models.py:64
 msgid "Search pattern"
 msgstr "検索パターン"
 
-#: invenio_oaiserver/models.py:68
+#: invenio_oaiserver/models.py:65
 msgid "Search pattern to select records"
 msgstr "レコード選択の検索パターン"
 
-#: invenio_oaiserver/models.py:150
+#: invenio_oaiserver/models.py:74
+msgid "System created"
+msgstr ""
+
+#: invenio_oaiserver/models.py:75
+msgid "System created set"
+msgstr ""
+
+#: invenio_oaiserver/models.py:110
 msgid "OutPut Setting"
 msgstr "出力設定"
 
-#: invenio_oaiserver/models.py:151
+#: invenio_oaiserver/models.py:111
 msgid "output setting of OAI-PMH"
 msgstr "OAI-PMHの出力設定"
 
-#: invenio_oaiserver/models.py:160
+#: invenio_oaiserver/models.py:120
 msgid "Emails of OAI-PMH."
 msgstr "OAI-PMHのメール"
 
-#: invenio_oaiserver/models.py:171
+#: invenio_oaiserver/models.py:131
 msgid "Repository Name of OAI-PMH"
 msgstr "OAI-PMHのリポジトリ名"
 
-#: invenio_oaiserver/models.py:181
+#: invenio_oaiserver/models.py:141
 msgid "Earliest Data"
 msgstr "最古データ"
 
-#: invenio_oaiserver/models.py:182
+#: invenio_oaiserver/models.py:142
 msgid "The earliest data of OAI-PMH"
 msgstr "OAI-PMHの最古データ"
 

@@ -4,6 +4,7 @@ from flask import current_app,Flask
 from flask_wtf import FlaskForm
 from flask_login.utils import login_user
 from wtforms import SubmitField
+from unittest.mock import patch
 
 from weko_user_profiles.forms import EmailProfileForm, ProfileForm
 from weko_user_profiles.api import current_userprofile
@@ -200,13 +201,13 @@ def test_get_user_profile_info(setup_data):
 
 # def handle_verification_form(form):
 # .tox/c1/bin/pytest --cov=weko_user_profiles tests/test_utils.py::test_handle_verification_form -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-user-profiles/.tox/c1/tmp
-def test_handle_verification_form(app,mocker):
-    mocker.patch("weko_user_profiles.utils.send_confirmation_instructions")
+def test_handle_verification_form(app):
+    patch("weko_user_profiles.utils.send_confirmation_instructions")
     class TestForm(FlaskForm):
         send_verification_email = SubmitField('Resend verification email')
     with app.test_request_context(method="POST",data={"send_verification_email":"test@test.org"}):
         form = TestForm(formdata=None,prefix="verification")
-        mock_flash = mocker.patch("weko_user_profiles.utils.flash")
+        mock_flash = patch("weko_user_profiles.utils.flash")
         handle_verification_form(form)
         mock_flash.assert_called_with("Verification email sent.",category="success")
 
@@ -384,7 +385,7 @@ def test_get_role_by_position(client):
     # enable_mapping is false
     result = get_role_by_position("test position")
     assert result == None
-    
+
     current_app.config.update(
         WEKO_USERPROFILES_ROLE_MAPPING_ENABLED=True,
         WEKO_USERPROFILES_ROLE_MAPPING={
@@ -393,26 +394,26 @@ def test_get_role_by_position(client):
             "WEKO_USERPROFILES_POSITION_LIST_STUDENT":"WEKO_USERPROFILES_STUDENT_ROLE"
         }
     )
-    
+
     # position in WEKO_USERPROFILES_POSITION_LIST_GENERAL
     result = get_role_by_position("Full-time Instructor")
     assert result == "General"
-    
+
     # position in WEKO_USERPROFILES_POSITION_LIST_GRADUATED_STUDENT
     result = get_role_by_position("Listener")
     assert result == "Graduated Student"
-    
+
     # position in WEKO_USERPROFILES_POSITION_LIST_STUDENT
     result = get_role_by_position("Student")
     assert result == "Student"
-    
+
     current_app.config.update(
         WEKO_USERPROFILES_POSITION_LIST=WEKO_USERPROFILES_POSITION_LIST+[("test position","test position")]
     )
     # position not in GENERAL,GRADUATED_STUDENT,STUDENT
     result = get_role_by_position("test position")
     assert result == None
-    
+
     current_app.config.update(
         WEKO_USERPROFILES_POSITION_LIST="not current setting"
     )

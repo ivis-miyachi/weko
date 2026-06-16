@@ -26,7 +26,7 @@ from datetime import datetime
 from functools import reduce
 from operator import getitem
 
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from invenio_db import db
 
 from weko_authors.models import AuthorsPrefixSettings, AuthorsAffiliationSettings

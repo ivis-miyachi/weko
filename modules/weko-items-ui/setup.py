@@ -55,7 +55,7 @@ setup_requires = [
 ]
 
 install_requires = [
-    'Flask-BabelEx>=0.9.2',
+    'Flask-Babel>=3.0.0',
     'invenio-assets>=1.0.0b7',
 ]
 
@@ -94,6 +94,9 @@ setup(
         ],
         'invenio_base.api_blueprints': [
             'weko_items_ui = weko_items_ui.views:blueprint_api',
+        ],
+        'invenio_assets.webpack': [
+            'weko_items_ui = weko_items_ui.webpack:weko_items_ui',
         ],
         'invenio_assets.bundles': [
             'weko_items_ui_indextree_css = '

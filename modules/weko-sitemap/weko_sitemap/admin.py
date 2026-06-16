@@ -13,11 +13,11 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from celery.result import AsyncResult
-from celery.task.control import inspect
+from celery.app.control import Inspect
 from flask import abort, current_app, jsonify, render_template, request, \
     session, url_for
 from flask_admin import BaseView, expose
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 from flask_wtf import FlaskForm,Form
 from weko_admin.api import validate_csrf_header
@@ -33,7 +33,7 @@ class SitemapSettingView(BaseView):
     @expose('/', methods=['GET'])
     def index(self):
         """Update sitemap page."""
-        form = Form()
+        form = FlaskForm()
         return self.render(current_app.config["WEKO_SITEMAP_ADMIN_TEMPLATE"],form=form)
 
     @expose('/update_sitemap', methods=['POST'])

@@ -6,6 +6,19 @@
 Changes
 =======
 
+Version 1.0.6 (released 2021-10-21)
+
+- Unpin boto3 and s3fs
+
+Version 1.0.5 (released 2021-10-20)
+
+- Bump versions to support Flask v2.
+
+Version 1.0.4 (released 2021-07-30)
+
+- Fix number of parts calculations.
+- Removed Python 2.7 support.
+
 Version 1.0.3 (released 2020-04-25)
 
 - Allow for dynamic part size for multipart uploads.

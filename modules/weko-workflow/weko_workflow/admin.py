@@ -28,8 +28,8 @@ import json
 from flask import abort, current_app, flash, jsonify, request, url_for
 from flask_admin import BaseView, expose
 from flask_login import current_user
-from flask_babelex import gettext as _
 from flask_wtf import FlaskForm
+from flask_babel import gettext as _
 from invenio_accounts.models import Role, User
 from invenio_communities.models import Community
 from invenio_db import db
@@ -109,7 +109,7 @@ class FlowSettingView(BaseView):
 
         if not self._check_auth(flow_id) :
             abort(403)
-        
+
         if not use_restricted_item:
             for action in flow.flow_actions:
                 if action.action_role:
@@ -382,7 +382,7 @@ class WorkFlowSettingView(BaseView):
         is_display_restricted_access_checkbox = is_sysadmin \
                                                 and current_app.config.get('WEKO_ADMIN_DISPLAY_RESTRICTED_SETTINGS', False) \
                                                 and current_app.config.get('WEKO_ADMIN_RESTRICTED_ACCESS_DISPLAY_FLAG', False)
-        if '0' == workflow_id:                                                                                              
+        if '0' == workflow_id:
             """Create new workflow"""
             return self.render(
                 'weko_workflow/admin/workflow_detail.html',
@@ -413,7 +413,7 @@ class WorkFlowSettingView(BaseView):
         else:
             display = role
             hide = []
-        
+
         if workflows.open_restricted \
             and not is_sysadmin \
             and current_app.config["WEKO_ADMIN_RESTRICTED_ACCESS_DISPLAY_FLAG"]:

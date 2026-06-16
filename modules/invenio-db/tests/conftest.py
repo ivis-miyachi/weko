@@ -9,28 +9,32 @@
 
 """Pytest configuration."""
 
-from __future__ import absolute_import, print_function
-
-import os, sys
+import os
+import sys
 import shutil
 import tempfile
-import pytest
+from unittest.mock import patch
 from flask import Flask
+from flask_babel import Babel
 from flask.cli import ScriptInfo
-from mock import patch
-from os.path import dirname, join
+# from os.path import dirname, join
 from pkg_resources import EntryPoint
 from werkzeug.utils import import_string
 from sqlalchemy_utils.functions import create_database, database_exists
 
-sys.path.append(os.path.dirname(__file__))
+import pytest
 
+import invenio_db
+from invenio_db import shared
+from invenio_db.utils import alembic_test_context
+
+sys.path.append(os.path.dirname(__file__))
 
 @pytest.yield_fixture()
 def db(app):
-    import invenio_db
-    from invenio_db import shared
-    db = invenio_db.db = shared.db = shared.SQLAlchemy(
+    """Database fixture with session sharing."""
+
+    db_ = invenio_db.db = shared.db = shared.SQLAlchemy(
         metadata=shared.MetaData(naming_convention=shared.NAMING_CONVENTION)
     )
     db.init_app(app)
@@ -66,15 +70,17 @@ def base_app(instance_path):
         #     'SQLALCHEMY_DATABASE_URI','sqlite:///test.db')
         SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
                                           'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
+        ALEMBIC_CONTEXT=alembic_test_context(),
     )
-    
+
     #InvenioDB(app_)
-    
+
     return app_
 
 @pytest.yield_fixture()
 def app(base_app):
     """Flask application fixture."""
+    Babel(base_app)
     with base_app.app_context():
         yield base_app
 
@@ -112,7 +118,7 @@ def _mock_entry_points(name):
 def mock_entry_points():
     with patch("pkg_resources.iter_entry_points",_mock_entry_points):
         yield
-    
+
     modules = ["demo", "demo.child", "demo.parent", "demo.versioned_a","demo.versioned_b"]
     for module in modules:
         if module in sys.modules:

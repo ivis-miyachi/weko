@@ -26,12 +26,11 @@ from datetime import date, datetime, time, timedelta, timezone
 from functools import wraps
 from operator import itemgetter
 
-from elasticsearch.exceptions import NotFoundError
-from elasticsearch_dsl.query import Bool, Exists, Q, QueryString
+from invenio_search.engine import search, dsl
 from flask import Markup, current_app, session, json, Flask
-from flask_babelex import get_locale
-from flask_babelex import gettext as _
-from flask_babelex import to_user_timezone, to_utc
+from flask_babel import get_locale
+from flask_babel import gettext as _
+from flask_babel import to_user_timezone, to_utc
 from flask_login import current_user
 from invenio_cache import current_cache
 from invenio_communities.models import Community
@@ -39,6 +38,7 @@ from invenio_db import db
 from invenio_i18n.ext import current_i18n
 from invenio_pidstore.models import PersistentIdentifier
 from invenio_search import RecordsSearch
+from invenio_search.utils import build_alias_name
 from simplekv.memory.redisstore import RedisStore
 from weko_admin.utils import is_exists_key_in_redis
 from weko_groups.models import Group
@@ -522,19 +522,19 @@ def get_admin_coverpage_setting():
 
 
 def get_elasticsearch_records_data_by_indexes(index_ids, start_date, end_date):
-    """Get data from elastic search.
+    """Get data from search engine.
 
     Arguments:
         index_ids -- index tree identifier list
 
     Returns:
-        dictionary -- elastic search data
+        dictionary -- search engine data
 
     """
     records_search = RecordsSearch()
     records_search = records_search.with_preference_param().\
         params(version=False)
-    records_search._index[0] = current_app.config['SEARCH_UI_SEARCH_INDEX']
+    records_search._index[0] = build_alias_name(current_app.config["SEARCH_UI_SEARCH_INDEX"])
     result = None
     try:
         from weko_search_ui.query import item_search_factory
@@ -549,20 +549,20 @@ def get_elasticsearch_records_data_by_indexes(index_ids, start_date, end_date):
         )
         search_result = search_instance.execute()
         result = search_result.to_dict()
-    except NotFoundError:
+    except search.NotFoundError:
         current_app.logger.debug('Indexes do not exist yet!')
 
     return result
 
 
 def generate_path(index_ids):
-    """Get data from elastic search.
+    """Get data from search engine.
 
     Arguments:
         index_ids -- index tree identifier
 
     Returns:
-        dictionary -- elastic search data
+        dictionary -- search engine data
 
     """
     from .api import Indexes
@@ -682,15 +682,15 @@ def get_record_in_es_of_index(index_id, recursively=True):
         index=current_app.config['SEARCH_UI_SEARCH_INDEX'])
     search = search.sort({"control_number": {"order": "asc"}})
     must_query = [
-        QueryString(query=query_string),
-        Q("terms", path=child_idx),
-        Q("terms", publish_status=[
+        dsl.query.QueryString(query=query_string),
+        dsl.Q("terms", path=child_idx),
+        dsl.Q("terms", publish_status=[
             PublishStatus.PUBLIC.value,
             PublishStatus.PRIVATE.value
         ])
     ]
     search = search.query(
-        Bool(filter=must_query)
+        dsl.query.Bool(filter=must_query)
     )
     return execute_search_with_pagination(search, max_result_size=-1)
 
@@ -751,6 +751,7 @@ def check_has_any_item_in_index_is_locked(index_id):
         if check_an_item_is_locked(int(item_id)):
             return True
     return False
+
 
 def check_has_any_harvest_settings_in_index_is_locked(index_id):
     """Check if any harvest settings in the index is locked.
@@ -933,17 +934,17 @@ def check_doi_in_index_and_child_index(index_id, recursively=True):
         child_idx = [index_id]
 
     query_string = "relation_version_is_last:true AND publish_status: {}".format(PublishStatus.PUBLIC.value)
-    search = RecordsSearch(
+    dsl.search = RecordsSearch(
         index=current_app.config['SEARCH_UI_SEARCH_INDEX'])
     search = search.sort({"control_number": {"order": "asc"}})
     must_query = [
-        QueryString(query=query_string),
-        Q("terms", path=child_idx),
-        Q("nested", path="identifierRegistration",
-          query=Exists(field="identifierRegistration"))
+        dsl.query.QueryString(query=query_string),
+        dsl.Q("terms", path=child_idx),
+        dsl.Q("nested", path="identifierRegistration",
+              query=dsl.query.Exists(field="identifierRegistration"))
     ]
-    search = search.query(
-        Bool(filter=must_query)
+    search = dsl.search.query(
+        dsl.query.Bool(filter=must_query)
     )
     return execute_search_with_pagination(search, max_result_size=-1)
 

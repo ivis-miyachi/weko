@@ -33,10 +33,11 @@ from invenio_oauth2server.models import Client, Token
 from mock import patch
 
 import pytest
-from elasticsearch_dsl import response, Search
+from invenio_search.engine import dsl
+# from elasticsearch_dsl import response, Search
 from sqlalchemy_utils.functions import create_database, database_exists
 from flask import Flask
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_menu import Menu
 
 from invenio_i18n import InvenioI18N
@@ -995,7 +996,7 @@ def mock_execute():
     def factory(data):
         if isinstance(data, str):
             data = json_data(data)
-        dummy = response.Response(Search(), data)
+        dummy = dsl.response.Response(dsl.Search(), data)
         return dummy
     return factory
 

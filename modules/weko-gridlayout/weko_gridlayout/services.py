@@ -26,7 +26,7 @@ from datetime import date, datetime, timedelta
 from operator import itemgetter
 
 from flask import Markup, current_app, session
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 from invenio_communities.models import Community
 from invenio_db import db
@@ -1138,7 +1138,7 @@ class WidgetDataLoaderServices:
     def get_arrivals_rss(cls, data, term, count):
         """Get New Arrivals RSS.
 
-        :dictionary: elastic search data
+        :dictionary: search engine data
 
         """
         from weko_items_ui.utils import find_hidden_items

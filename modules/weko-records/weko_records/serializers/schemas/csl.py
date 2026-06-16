@@ -31,7 +31,6 @@ from datetime import datetime
 
 from invenio_formatter.filters.datetime import from_isodate
 from invenio_i18n.ext import current_i18n
-from invenio_oaiserver.response import get_identifier
 from marshmallow import Schema, fields, missing, ValidationError
 
 import weko_records.config as config
@@ -180,24 +179,24 @@ class RecordSchemaCSLJSON(Schema):
         metadata = get_data_from_mapping('datacite:date', obj)
         if not metadata:
             return missing
-        if re.search("\d{4}-\d{2}-\d{2}",metadata):
+        if re.search(r"\d{4}-\d{2}-\d{2}",metadata):
             format = "%Y-%m-%d"
             metadata = datetime.strptime(metadata, format)
             date = from_isodate(metadata)
             date_parts = [[date.year, date.month, date.day]]
-        elif re.search("\d{4}-\d{2}",metadata):
+        elif re.search(r"\d{4}-\d{2}",metadata):
             format = "%Y-%m"
             metadata = datetime.strptime(metadata, format)
             date = from_isodate(metadata)
             date_parts = [[date.year, date.month]]
-        elif re.search("\d{4}",metadata):
+        elif re.search(r"\d{4}",metadata):
             format = "%Y"
             metadata = datetime.strptime(metadata, format)
             date = from_isodate(metadata)
             date_parts = [[date.year]]
         else:
             raise ValidationError("Incorrect format")
-        
+
         result = {'date-parts': date_parts}
         return result if date else missing
 
@@ -211,6 +210,7 @@ class RecordSchemaCSLJSON(Schema):
 
     def get_doi(self, obj):
         """Get doi."""
+        from invenio_oaiserver.response import get_identifier
         # Get DOI info and add to metadata.
         identifier = 'system_identifier'
         record = obj['record']

@@ -25,7 +25,10 @@ from functools import partial
 
 from babel.core import Locale
 from flask import _request_ctx_stack, current_app, request, session
-from flask_babelex import gettext as _
+from flask_menu import current_menu
+from invenio_i18n import LazyString
+from invenio_i18n import lazy_gettext as _
+from invenio_theme.proxies import current_theme_icons
 from flask_login import current_user
 from invenio_accounts.models import Role, userrole
 from invenio_db import db
@@ -35,7 +38,7 @@ from invenio_i18n.views import set_lang
 from . import config
 from .models import AdminLangSettings, AdminSettings, SessionLifetime, SiteInfo
 from .utils import overwrite_the_memory_config_with_db
-from .views import blueprint, custom_set_lang
+from .views import blueprint, custom_set_lang, _has_admin_access
 
 
 class WekoAdmin(object):
@@ -57,7 +60,7 @@ class WekoAdmin(object):
                 is_use_mail_templates = restricted_access_settings.get("edit_mail_templates_enable", False)
             is_display_restricted_settings = conf.get('WEKO_ADMIN_DISPLAY_RESTRICTED_SETTINGS', False)
             try:
-                roles = db.session.query(Role).join(userrole).filter_by(
+                roles = db.session.query(Role).join(userrole, userrole.c.role_id == Role.id).filter_by(
                     user_id=current_user.get_id()).all()
             except Exception as e:
                 current_app.logger.error(
@@ -112,6 +115,7 @@ class WekoAdmin(object):
                 setattr(view, 'is_visible', is_visible_fn)
                 new_views.append(view)
             app.extensions['admin'][0]._views = new_views  # Overwrite views
+            initialize_empty_theme_css()
 
         @app.before_request
         def set_default_language():
@@ -125,7 +129,7 @@ class WekoAdmin(object):
                 return
             if request.path == "/oai":
                 return
-            
+
             if "selected_language" not in session:
                 registered_languages = AdminLangSettings\
                     .get_registered_language()
@@ -194,5 +198,34 @@ class WekoAdmin(object):
         """Init Overwrite the memory Config values with the DB values."""
         @app.before_first_request
         def overwrite_the_memory_config():
+            from .utils import overwrite_the_memory_config_with_db
             site_info = SiteInfo.get()
             overwrite_the_memory_config_with_db(app, site_info)
+
+def finalize_app(app):
+    """Finalize app."""
+    icons = app.extensions['invenio-theme'].icons
+
+    current_menu.submenu("settings.lifetime").register(
+        endpoint="weko_admin.lifetime",
+        text=_(
+            '%(icon)s Session',
+            icon=f'<i class="{current_theme_icons.cogs}"></i>'
+        ),
+        visible_when=_has_admin_access,
+        order=14
+    )
+    
+def initialize_empty_theme_css():
+    import os
+    css_file = os.path.join(
+        current_app.static_folder,
+        'dist', 'css', 'theme-css-color.css'
+    )
+
+    os.makedirs(os.path.dirname(css_file), exist_ok=True)
+
+    if not os.path.exists(css_file):
+        with open(css_file, 'w', encoding='utf-8') as fp:
+            fp.write("")
+        current_app.logger.info("Created an empty theme-css-color.css file.")

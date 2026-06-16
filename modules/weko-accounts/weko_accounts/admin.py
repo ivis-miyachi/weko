@@ -25,7 +25,7 @@ import json
 
 from flask import abort, current_app, flash, request
 from flask_admin import BaseView, expose
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from werkzeug.local import LocalProxy
 
 from weko_admin.models import AdminSettings, db

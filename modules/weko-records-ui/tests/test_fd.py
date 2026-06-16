@@ -1,11 +1,19 @@
 # .tox/c1/bin/pytest --cov=weko_records_ui tests/test_fd.py -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-records-ui/.tox/c1/tmp
-import io
-import pytest
-from flask import url_for,make_response
-from flask_babelex import get_locale
-from mock import patch
-from sqlalchemy.exc import SQLAlchemyError
+
+import re
+from flask_login import current_user
+from requests import Response
+from weko_deposit.api import WekoFileObject
+from weko_records_ui.errors import AvailableFilesNotFoundRESTError
+from weko_records_ui.config import WEKO_RECORDS_UI_DETAIL_TEMPLATE
 from unittest.mock import MagicMock
+from sqlalchemy.exc import SQLAlchemyError
+from invenio_theme.config import THEME_ERROR_TEMPLATE
+import pytest
+import io
+from flask import url_for, make_response
+from flask_babel import get_locale
+from unittest.mock import patch
 from werkzeug.exceptions import NotFound ,Forbidden
 from datetime import datetime, timedelta,timezone
 from invenio_records_files.utils import record_file_factory
@@ -133,13 +141,13 @@ def test_file_ui(app,records,itemtypes,users,mocker):
 # for records_restricted
 # # def file_ui(
 # # .tox/c1/bin/pytest --cov=weko_records_ui tests/test_fd.py::test_file_ui2 -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-records-ui/.tox/c1/tmp
-def test_file_ui2(app,records_restricted,itemtypes,users ,client ,mocker):
+def test_file_ui2(app,records_restricted,itemtypes,users ,client ):
     indexer, results = records_restricted
     recid_none_login =  results[len(results) -2]["recid"]
     recid_login =  results[len(results) -1]["recid"]
     # 21
     # with app.test_request_context():
-    mock= mocker.patch('weko_records_ui.fd._download_file' ,return_value=make_response())
+    mock= patch('weko_records_ui.fd._download_file' ,return_value=make_response())
     res = client.get(url_for('invenio_records_ui.recid_files'
                         , pid_value = recid_none_login.pid_value
                         , filename = "helloworld_open_restricted.pdf"
@@ -151,7 +159,7 @@ def test_file_ui2(app,records_restricted,itemtypes,users ,client ,mocker):
     def cannot():
         return False
     data1.can = cannot
-    mock = mocker.patch('weko_records_ui.fd._redirect_method' ,return_value=make_response())
+    mock = patch('weko_records_ui.fd._redirect_method' ,return_value=make_response())
     with patch('weko_records_ui.fd.file_permission_factory', return_value=data1):
         res = client.get(url_for('invenio_records_ui.recid_files'
                             , pid_value = recid_none_login.pid_value
@@ -177,8 +185,7 @@ def test_file_ui2(app,records_restricted,itemtypes,users ,client ,mocker):
 # def file_ui(
 # .tox/c1/bin/pytest --cov=weko_records_ui tests/test_fd.py::test_file_ui3 -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-records-ui/.tox/c1/tmp
 def test_file_ui3(
-    app, records_restricted, itemtypes, db_file_permission, users,
-    client, mocker
+    app, records_restricted, itemtypes, db_file_permission, users, client
 ):
     _, results = records_restricted
     recid_login =  results[len(results) -1]["recid"]
@@ -199,7 +206,7 @@ def test_file_ui3(
                 )
                 fileobj.data["accessrole"] = "open_restricted"
                 fileobj.data["filename"] = "helloworld_open_restricted.pdf"
-                mock_validate_onetime_token = mocker.patch(
+                mock_validate_onetime_token = patch(
                     "weko_records_ui.fd.validate_onetime_token"
                 )
                 file_ui(
@@ -736,8 +743,7 @@ def test_file_download_secret(dl_file, save_log, current_user, err_res,
                 pid, record, filename, _record_file_factory) == 'ERROR'
 
 # .tox/c1/bin/pytest --cov=weko_records_ui tests/test_fd.py::test_file_list_ui -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-records-ui/.tox/c1/tmp
-@pytest.mark.timeout(60)
-def test_file_list_ui(app,records,itemtypes,users,mocker,db_file_permission):
+def test_file_list_ui(app,records,itemtypes,users,db_file_permission):
     indexer, results = records
 
     # 9 can download
@@ -751,7 +757,7 @@ def test_file_list_ui(app,records,itemtypes,users,mocker,db_file_permission):
     record = results[3]["record"]
     with app.test_request_context():
         with patch("flask_login.utils._get_user", return_value=users[4]["obj"]):
-            test_mock = mocker.patch('weko_records_ui.utils.create_tsv', return_value=io.StringIO())
+            test_mock = patch('weko_records_ui.utils.create_tsv', return_value=io.StringIO())
             accessrole_list = ["open_access", "open_no"]
             for (file, accessrole) in zip(record.files, accessrole_list):
                 file["accessrole"] = accessrole

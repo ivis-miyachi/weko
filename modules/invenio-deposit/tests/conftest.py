@@ -1,26 +1,10 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2016 CERN.
+# Copyright (C) 2016-2019 CERN.
 #
-# Invenio is free software; you can redistribute it
-# and/or modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 2 of the
-# License, or (at your option) any later version.
-#
-# Invenio is distributed in the hope that it will be
-# useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Invenio; if not, write to the
-# Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston,
-# MA 02111-1307, USA.
-#
-# In applying this license, CERN does not
-# waive the privileges and immunities granted to it by virtue of its status
-# as an Intergovernmental Organization or submit itself to any jurisdiction.
+# Invenio is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
 
 
 """Pytest configuration."""
@@ -34,19 +18,21 @@ import tempfile
 from time import sleep
 
 import pytest
-from elasticsearch.exceptions import RequestError
 from flask import Flask
 from flask.cli import ScriptInfo
-from flask_babelex import Babel
-from flask_breadcrumbs import Breadcrumbs
+from flask_babel import Babel
 from flask_celeryext import FlaskCeleryExt
 from flask_oauthlib.provider import OAuth2Provider
 from flask_security import login_user
 from .helpers import fill_oauth2_headers, make_pdf_fixture
+from opensearchpy import OpenSearch
+from opensearchpy.exceptions import NotFoundError, RequestError
 from invenio_access import InvenioAccess
 from invenio_access.models import ActionUsers
+from invenio_i18n import InvenioI18N
 from invenio_accounts import InvenioAccounts
-from invenio_accounts.views import blueprint as accounts_blueprint
+from invenio_accounts.views.rest import create_rest_blueprint
+from invenio_accounts.views.settings import create_settings_blueprint
 from invenio_assets import InvenioAssets
 from invenio_db import InvenioDB, db
 from invenio_files_rest import InvenioFilesREST
@@ -61,20 +47,26 @@ from invenio_pidstore import InvenioPIDStore
 from invenio_records import InvenioRecords
 from invenio_records_rest import InvenioRecordsREST
 from invenio_records_rest.utils import PIDConverter
+from invenio_records_rest.views import \
+    create_blueprint_from_app as records_rest_bp
 from invenio_records_ui import InvenioRecordsUI
+from invenio_records_ui.views import create_blueprint_from_app as records_ui_bp
 from invenio_rest import InvenioREST
 from invenio_search import InvenioSearch, current_search, current_search_client
+from invenio_search.errors import IndexAlreadyExistsError
+from invenio_search.engine import search
 from invenio_search_ui import InvenioSearchUI
 from six import BytesIO, get_method_self
 from sqlalchemy import inspect
 from sqlalchemy_utils.functions import create_database, database_exists, \
     drop_database
-from werkzeug.wsgi import DispatcherMiddleware
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from invenio_deposit import InvenioDeposit, InvenioDepositREST
 from invenio_deposit.api import Deposit
 from invenio_deposit.scopes import write_scope
 from kombu import Exchange, Queue
+
 
 def object_as_dict(obj):
     """Make a dict from SQLAlchemy object."""
@@ -90,10 +82,17 @@ def base_app(request):
     def init_app(app_):
         app_.config.update(
             BROKER_URL='amqp://guest:guest@rabbitmq:5672/',
-            CELERY_BROKER_URL = 'amqp://guest:guest@rabbitmq:5672/',
+            CELERY_BROKER_URL='amqp://guest:guest@rabbitmq:5672/',
             CELERY_ALWAYS_EAGER=True,
             CELERY_CACHE_BACKEND='memory',
-            CELERY_EAGER_PROPAGATES_EXCEPTIONS=True,
+            CELERY_EAGER_PROPAGATES=True,
+            FILES_REST_DEFAULT_STORAGE_CLASS='S',
+            FILES_REST_STORAGE_CLASS_LIST={
+            'S': 'Standard',
+            'A': 'Archive',
+            },
+            FILES_REST_DEFAULT_QUOTA_SIZE=None,
+            FILES_REST_DEFAULT_MAX_FILE_SIZE=None,
             CELERY_RESULT_BACKEND='cache',
             JSONSCHEMAS_URL_SCHEME='http',
             SECRET_KEY='CHANGE_ME',
@@ -101,9 +100,13 @@ def base_app(request):
             # SQLALCHEMY_DATABASE_URI=os.environ.get(
             #     'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
             SQLALCHEMY_DATABASE_URI=os.getenv('SQLALCHEMY_DATABASE_URI',
-                                          'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
+                                              'postgresql+psycopg2://invenio:dbpass123@postgresql:5432/wekotest'),
             SEARCH_ELASTIC_HOSTS=os.environ.get(
-                'SEARCH_ELASTIC_HOSTS', 'elasticsearch'),
+                    'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+            SEARCH_HOSTS=os.environ.get(
+                'SEARCH_HOST', 'opensearch'
+            ),
+            SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
             SQLALCHEMY_TRACK_MODIFICATIONS=True,
             SQLALCHEMY_ECHO=False,
             TESTING=True,
@@ -128,8 +131,8 @@ def base_app(request):
         )
         Babel(app_)
         FlaskCeleryExt(app_)
-        Breadcrumbs(app_)
         OAuth2Provider(app_)
+        InvenioI18N(app_)
         InvenioDB(app_)
         InvenioAccounts(app_)
         InvenioAccess(app_)
@@ -139,7 +142,8 @@ def base_app(request):
         InvenioFilesREST(app_)
         InvenioPIDStore(app_)
         InvenioRecords(app_)
-        InvenioSearch(app_)
+        search = InvenioSearch(app_)
+        search.register_mappings('deposits', 'invenio_deposit.mappings')
 
     api_app = Flask('testapiapp', instance_path=instance_path)
     api_app.url_map.converters['pid'] = PIDConverter
@@ -151,29 +155,32 @@ def base_app(request):
     InvenioOAuth2ServerREST(api_app)
     InvenioRecordsREST(api_app)
 
-    app = Flask('testapp', instance_path=instance_path)
-    app.url_map.converters['pid'] = PIDConverter
+    app_ = Flask('testapp', instance_path=instance_path)
+    app_.url_map.converters['pid'] = PIDConverter
     # initialize InvenioDeposit first in order to detect any invalid dependency
-    InvenioDeposit(app)
-    init_app(app)
-    app.register_blueprint(accounts_blueprint)
-    app.register_blueprint(oauth2server_settings_blueprint)
-    InvenioAssets(app)
-    InvenioSearchUI(app)
-    InvenioRecordsUI(app)
-    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+    InvenioDeposit(app_)
+    init_app(app_)
+    app_.register_blueprint(create_settings_blueprint(app_))
+    app_.register_blueprint(create_rest_blueprint(app_))
+    app_.register_blueprint(oauth2server_settings_blueprint)
+    InvenioAssets(app_)
+    InvenioSearchUI(app_)
+    InvenioRecordsUI(app_)
+    app_.register_blueprint(records_ui_bp(app_))
+    app_.register_blueprint(records_rest_bp(app_))
+    app_.wsgi_app = DispatcherMiddleware(app_.wsgi_app, {
         '/api': api_app.wsgi_app
     })
 
-    with app.app_context():
+    with app_.app_context():
         if str(db.engine.url) != 'sqlite://' and \
            not database_exists(str(db.engine.url)):
             create_database(str(db.engine.url))
         db.create_all()
 
-    yield app
+    yield app_
 
-    with app.app_context():
+    with app_.app_context():
         if str(db.engine.url) != 'sqlite://':
             drop_database(str(db.engine.url))
         shutil.rmtree(instance_path)
@@ -190,6 +197,7 @@ def app(base_app):
 def api(base_app):
     """Yield the REST API application in its context."""
     api = get_method_self(base_app.wsgi_app.mounts['/api'])
+    api.register_blueprint(records_rest_bp(api))
     with api.app_context():
         yield api
 
@@ -300,8 +308,9 @@ def fake_schemas(app, api, es, tmpdir):
 def es(app):
     """Elasticsearch fixture."""
     try:
+        # current_search_client.indices.delete(index="test-*")
         list(current_search.create())
-    except RequestError:
+    except:
         list(current_search.delete(ignore=[404]))
         list(current_search.create(ignore=[400]))
     current_search_client.indices.refresh()
@@ -329,7 +338,7 @@ def deposit(app, es, users, location):
     }
     with app.test_request_context():
         datastore = app.extensions['security'].datastore
-        login_user(datastore.find_user(email=users[0]['email']))
+        login_user(datastore.find_user(email=users[0]['_email']))
         deposit = Deposit.create(record)
         deposit.commit()
         db.session.commit()
@@ -395,6 +404,7 @@ def oauth2_headers_user_2(app, json_headers, write_token_user_2):
     It uses the token associated with the second user.
     """
     return fill_oauth2_headers(json_headers, write_token_user_2)
+
 
 @pytest.fixture()
 def script_info(app):

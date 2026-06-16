@@ -23,7 +23,7 @@ import json
 
 from flask import current_app, jsonify, request
 from flask_admin import BaseView, expose
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 from invenio_communities.models import Community
 from weko_index_tree.api import Indexes

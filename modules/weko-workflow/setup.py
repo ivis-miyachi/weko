@@ -56,7 +56,7 @@ setup_requires = [
 
 install_requires = [
     'Flask>=0.11.1',
-    'Flask-BabelEx>=0.9.2',
+    'Flask-Babel>=3.0.0',
 ]
 
 packages = find_packages()
@@ -102,26 +102,8 @@ setup(
             'weko_activity_settings = weko_workflow.admin:activity_settings_adminview',
             'weko_workspaceworkflow = weko_workflow.admin:workspace_workflow_adminview',
         ],
-        'invenio_assets.bundles': [
-            'workflow_js = weko_workflow.bundles:js_workflow',
-            'workflow_item_link_js = weko_workflow.bundles:js_item_link',
-            'workflow_activity_list_js = '
-            'weko_workflow.bundles:js_activity_list',
-            'workflow_iframe_js = weko_workflow.bundles:js_iframe',
-            'workflow_oa_policy_js = weko_workflow.bundles:js_oa_policy',
-            'workflow_css = weko_workflow.bundles:css_workflow',
-            'workflow_datepicker_css ='
-            ' weko_workflow.bundles:css_datepicker_workflow',
-            'workflow_identifier_grant_js = '
-            'weko_workflow.bundles:js_identifier_grant',
-            'workflow_quit_confirmation_js = '
-            'weko_workflow.bundles:js_quit_confirmation',
-            'workflow_lock_activity_js = '
-            'weko_workflow.bundles:js_lock_activity',
-            'workflow_detail_admin_js = '
-            'weko_workflow.bundles:js_admin_workflow_detail',
-            'flow_detail_admin_js = '
-            'weko_workflow.bundles:js_admin_flow_detail',
+        'invenio_assets.webpack': [
+            'weko_workflow = weko_workflow.webpack:weko_workflow'
         ],
         'invenio_i18n.translations': [
             'messages = weko_workflow',

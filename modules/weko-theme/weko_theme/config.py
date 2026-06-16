@@ -106,6 +106,13 @@ COVER_TEMPLATE = 'weko_theme/page_cover.html'
 WEKO_THEME_INSTANCE_DATA_DIR = 'data'
 """ユーザーデータのィレクトリ."""
 
+WEKO_COMMUNITIES_DEFAULT_PROPERTIES = {
+    'title1': 'Communities',
+    'title2': 'コミュニティ',
+    'icon_code': 'fa fa-group',
+    'supplement': 'created and curated by WEKO3 users'
+}
+
 WEKO_THEME_ADMIN_MENU = [
     {
         'name': 'Home',
@@ -408,10 +415,13 @@ WEKO_THEME_ADMIN_MENU = [
                 'order': 23
             },
             {
-                'name': 'Others',
+                'name': 'Communities Page',
                 'order': 24
+            },
+            {
+                'name': 'Others',
+                'order': 25
             }
-
         ]
     },
     {

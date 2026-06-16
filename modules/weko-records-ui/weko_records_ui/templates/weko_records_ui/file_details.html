@@ -25,22 +25,30 @@
 
 {%- block css %}
   {{ super() }}
-  {% assets "weko_records_ui_css" %}<link href="{{ ASSET_URL }}" rel="stylesheet">{% endassets %}
+  {{ webpack['records_ui_css_style.css']}}
 {%- endblock css %}
 
 {%- block javascript %}
-  {% assets "invenio_deposit_dependencies_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
   {{ super() }}
   {% assets "weko_theme_js_treeview" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  {% assets "weko_theme_js_top_page" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  <!-- {% assets "weko_records_ui_cites_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %} -->
-  {% assets "weko_theme_js_detail_search" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  {% assets "weko_records_ui_dependencies_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  {% assets "weko_records_ui_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  {% assets "weko_records_ui_preview_carousel_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  <script src="{{ url_for('static', filename='js/weko_records_ui/file_stats.js')}}"></script>
   {% assets "weko_records_ui_bucket_js" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
-  {% assets "weko_theme_js_widget" %}<script src="{{ ASSET_URL }}"></script>{% endassets %}
+  <script src="{{ url_for('static', filename='js/weko_theme/inline.bundle.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/weko_theme/polyfills.bundle.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/weko_theme/main.bundle.js') }}" defer></script>
+  {{ webpack['theme-js-top-page.js']}}
+  {{ webpack['theme-search-detail.js']}}
+  {{ webpack['records_ui_js_dependecies.js']}}
+  {{ webpack['records_ui_js.js']}}
+  {{ webpack['records_ui_preview_carousel.js']}}
+  <script src="/assets/js/weko_records_ui/file_stats.js"></script>
+<!-- start demo block-->
+
+<script type="text/javascript">var addthis_config = {"data_track_addressbar": true};</script>
+{%- set site_info = site_info|get_site_info %}
+{%- set addthis_user_id = site_info.get("addthis_user_id",config.ADDTHIS_USER_ID) %}
+<script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid={{ addthis_user_id }}"></script>
+<!-- end demo block -->
+  {{ webpack['theme-widget.js']}}
 {%- endblock javascript %}
 
 {%- block page_body_tabs %}

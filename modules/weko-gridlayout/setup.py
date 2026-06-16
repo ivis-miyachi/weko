@@ -42,7 +42,7 @@ setup_requires = [
 ]
 
 install_requires = [
-    'Flask-BabelEx>=0.9.3',
+    'Flask-Babel>=3.0.0',
 ]
 
 packages = find_packages()
@@ -76,6 +76,9 @@ setup(
         'invenio_base.apps': [
             'weko_gridlayout = weko_gridlayout:WekoGridLayout',
             'weko_gridlayout_rss = weko_gridlayout:WekoGridLayout',
+        ],
+        'invenio_base.finalize_app': [
+            'weko_gridlayout = weko_gridlayout.ext:register_error_handle',
         ],
         'invenio_base.api_blueprints': [
             'weko_gridlayout = weko_gridlayout.views:blueprint_api',
@@ -128,6 +131,9 @@ setup(
             'weko_gridlayout.bundles:react_trumbowyg_js',
             'weko_gridlayout_date_picker_js = '
             'weko_gridlayout.bundles:date_picker_js',
+        ],
+        'invenio_assets.webpack': [
+            'weko_gridlayout = weko_gridlayout.webpack:weko_gridlayout',
         ],
         # 'invenio_base.api_apps': [],
         # 'invenio_base.blueprints': [],

@@ -55,7 +55,7 @@ setup_requires = [
 ]
 
 install_requires = [
-    'Flask-BabelEx>=0.9.2',
+    'Flask-Babel>=3.0.0',
     'invenio-accounts>=1.0.0b10',
     'invenio-logging>=1.0.0b3',
     'invenio-db>=1.0.0b9',
@@ -110,6 +110,9 @@ setup(
             'weko_accounts.bundles:embedded_ds_multi_language_js',
             'weko_accounts_suggest_js = weko_accounts.bundles:suggest_js',
             'weko_accounts_shibuser_css = weko_accounts.bundles:shibuser_css',
+        ],
+        'invenio_assets.webpack': [
+            'weko_accounts = weko_accounts.webpack:weko_accounts',
         ],
     },
     extras_require=extras_require,

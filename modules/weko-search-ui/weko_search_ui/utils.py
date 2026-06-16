@@ -40,6 +40,7 @@ import chardet
 import urllib.parse
 import gc
 from collections import Callable, OrderedDict, defaultdict
+from collections.abc import Callable
 from datetime import datetime, timezone, timedelta
 from functools import partial, reduce, wraps
 import io
@@ -51,12 +52,11 @@ import pickle
 import redis
 from celery import chain
 from celery.result import AsyncResult
-from celery.task.control import revoke
-from elasticsearch import ElasticsearchException
-from elasticsearch.exceptions import ConnectionError
+from opensearchpy.exceptions import ConnectionError, OpenSearchException
+from invenio_search.engine import search
 from jsonschema import Draft4Validator
 from flask import abort, current_app, request, send_file
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 
 from invenio_db import db
@@ -64,13 +64,13 @@ from invenio_files_rest.models import FileInstance, Location, ObjectVersion
 from invenio_files_rest.proxies import current_files_rest
 from invenio_files_rest.utils import find_and_update_location_size
 from invenio_i18n.ext import current_i18n
-from invenio_pidrelations.contrib.versioning import PIDVersioning
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
 from invenio_pidstore.errors import PIDDoesNotExistError
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_records.api import Record
 from invenio_records.models import RecordMetadata
 from invenio_search import RecordsSearch
-
+from invenio_search.utils import build_alias_name
 from sqlalchemy import func as _func
 from sqlalchemy.exc import SQLAlchemyError
 from weko_admin.models import AdminSettings, SessionLifetime
@@ -258,7 +258,7 @@ def get_tree_items(index_tree_id, max_result_size=WEKO_SEARCH_MAX_RESULT):
     """Get tree items."""
     records_search = RecordsSearch()
     records_search = records_search.with_preference_param().params(version=False)
-    records_search._index[0] = current_app.config["SEARCH_UI_SEARCH_INDEX"]
+    records_search._index[0] = build_alias_name(current_app.config["SEARCH_UI_SEARCH_INDEX"])
     search_instance, _ = item_path_search_factory(
         None, records_search, index_id=index_tree_id
     )
@@ -574,7 +574,7 @@ def check_tsv_import_items(
 
         list_record = handle_check_exist_record(list_record)
         handle_item_title(list_record)
-        
+
         list_record = handle_check_date(list_record)
         handle_check_id(list_record)
 
@@ -594,7 +594,7 @@ def check_tsv_import_items(
 
         handle_check_authors_prefix(list_record)
         handle_check_authors_affiliation(list_record)
-        
+
         if not is_gakuninrdm:
             handle_check_cnri(list_record)
             handle_check_doi_indexes(list_record)
@@ -768,7 +768,7 @@ def unpackage_import_file(data_path: str, file_name: str, file_format: str, forc
             record["uri"] = None
 
     current_app.logger.debug('list_record2: {}'.format(list_record))
-    
+
     handle_set_change_identifier_flag(list_record, is_change_identifier)
     handle_fill_system_item(list_record)
 
@@ -1262,7 +1262,7 @@ def read_stats_file(file_path: str, file_name: str, file_format: str) -> dict:
                     current_app.logger.debug(
                         "duplication_item_ids: {}".format(duplication_item_ids)
                     )
-                    
+
                     if duplication_item_ids:
                         msg = _("The following metadata keys are duplicated." "<br/>{}")
                         raise Exception(
@@ -1283,7 +1283,7 @@ def read_stats_file(file_path: str, file_name: str, file_format: str) -> dict:
                         current_app.logger.debug(
                             "not_consistent_list: {}".format(not_consistent_list)
                         )
-                        
+
                         if not_consistent_list:
                             msg = _(
                                 "The item does not consistent with the "
@@ -1302,7 +1302,7 @@ def read_stats_file(file_path: str, file_name: str, file_format: str) -> dict:
                         current_app.logger.debug(
                             "item_path_not_existed: {}".format(item_path_not_existed)
                         )
-                        
+
 
                 elif (num == 4 or num == 5) and data_row[0].startswith("#"):
                     continue
@@ -1310,7 +1310,7 @@ def read_stats_file(file_path: str, file_name: str, file_format: str) -> dict:
                     data_parse_metadata = parse_to_json_form(
                         zip(item_path, data_row), item_path_not_existed
                     )
-                    
+
                     if not data_parse_metadata:
                         raise Exception(
                             {"error_msg": _("Cannot read {} file correctly.".format(file_format.upper()))}
@@ -1563,7 +1563,7 @@ def handle_check_exist_record(list_record) -> list:
         errors = item.get("errors") or []
         item_id = item.get("id")
         # current_app.logger.debug("item_id:{}".format(item_id))
-        if item_id and item_id is not "":
+        if item_id and item_id != "":
             system_url = request.host_url + "records/" + str(item_id)
             if item.get("uri") != system_url:
                 errors.append(_("Specified URI and system URI do not match."))
@@ -1998,7 +1998,8 @@ def register_item_metadata(item, root_path, owner, is_gakuninrdm=False, request_
             _deposit = deposit.newversion(pid)
             _deposit.publish_without_commit()
         else:    # Update last version
-            _pid = PIDVersioning(child=pid).last_child
+            parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
+            _pid = PIDNodeVersioning(pid=parent_pid).last_child
             _record = WekoDeposit.get_record(_pid.object_uuid)
             _deposit = WekoDeposit(_record, _record.model)
             _deposit["path"] = new_data.get("path")
@@ -2196,8 +2197,9 @@ def import_items_to_system(
                 ).first()
                 item["pid"] = pid
                 bef_metadata = WekoIndexer().get_metadata_by_item_id(pid.object_uuid)
+                parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
                 bef_last_ver_metadata = WekoIndexer().get_metadata_by_item_id(
-                    PIDVersioning(child=pid).last_child.object_uuid
+                    PIDNodeVersioning(pid=parent_pid).last_child.object_uuid
                 )
                 record_pid = pid
                 old_record = WekoRecord.get_record_by_pid(record_pid.pid_value)
@@ -2264,8 +2266,9 @@ def import_items_to_system(
                     pid_type="recid", pid_value=item["id"]
                 ).first()
                 bef_metadata = WekoIndexer().get_metadata_by_item_id(pid.object_uuid)
+                parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
                 bef_last_ver_metadata = WekoIndexer().get_metadata_by_item_id(
-                    PIDVersioning(child=pid).last_child.object_uuid
+                    PIDNodeVersioning(pid=parent_pid).last_child.object_uuid
                 )
                 handle_remove_es_metadata(item, bef_metadata, bef_last_ver_metadata)
             db.session.rollback()
@@ -2306,15 +2309,16 @@ def import_items_to_system(
             )
             error_id = 'failed_to_update_elasticsearch'
             return {"success": False, "error_id": error_id}
-        except ElasticsearchException as ex:
+        except OpenSearchException as ex:
             current_app.logger.error("elasticsearch  error: %s", ex)
             if item.get("id"):
                 pid = PersistentIdentifier.query.filter_by(
                     pid_type="recid", pid_value=item["id"]
                 ).first()
                 bef_metadata = WekoIndexer().get_metadata_by_item_id(pid.object_uuid)
+                parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
                 bef_last_ver_metadata = WekoIndexer().get_metadata_by_item_id(
-                    PIDVersioning(child=pid).last_child.object_uuid
+                    PIDNodeVersioning(pid=parent_pid).last_child.object_uuid
                 )
                 handle_remove_es_metadata(item, bef_metadata, bef_last_ver_metadata)
             db.session.rollback()
@@ -2338,8 +2342,9 @@ def import_items_to_system(
                     pid_type="recid", pid_value=item["id"]
                 ).first()
                 bef_metadata = WekoIndexer().get_metadata_by_item_id(pid.object_uuid)
+                parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
                 bef_last_ver_metadata = WekoIndexer().get_metadata_by_item_id(
-                    PIDVersioning(child=pid).last_child.object_uuid
+                    PIDNodeVersioning(pid=parent_pid).last_child.object_uuid
                 )
                 handle_remove_es_metadata(item, bef_metadata, bef_last_ver_metadata)
             db.session.rollback()
@@ -2371,8 +2376,9 @@ def import_items_to_system(
                     pid_type="recid", pid_value=item["id"]
                 ).first()
                 bef_metadata = WekoIndexer().get_metadata_by_item_id(pid.object_uuid)
+                parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
                 bef_last_ver_metadata = WekoIndexer().get_metadata_by_item_id(
-                    PIDVersioning(child=pid).last_child.object_uuid
+                    PIDNodeVersioning(pid=parent_pid).last_child.object_uuid
                 )
                 handle_remove_es_metadata(item, bef_metadata, bef_last_ver_metadata)
             db.session.rollback()
@@ -4220,7 +4226,7 @@ def handle_fill_system_item(list_record):
                 existed_doi = False
 
             checked_item_doi_ra = False
-            if item_doi_prefix is not "" and doi_setting:
+            if item_doi_prefix != "" and doi_setting:
                 if doi_setting.jalc_doi == item_doi_prefix:
                     checked_item_doi_ra = (item_doi_ra == "JaLC")
                 elif doi_setting.jalc_crossref_doi == item_doi_prefix:
@@ -4315,15 +4321,15 @@ def handle_fill_system_item(list_record):
 
             if is_change_identifier:
                 if not (current_app.config["WEKO_HANDLE_ALLOW_REGISTER_CNRI"] and item_cnri):
-                    if item_doi is "":
+                    if item_doi == "":
                         errors.append(_('Please specify DOI prefix/suffix.'))
-                    elif item_doi_suffix is "":
+                    elif item_doi_suffix == "":
                         errors.append(_('Please specify DOI suffix.'))
             # 書き換えモードでなく、ndl
             elif is_ndl:
-                if item_doi is "":
+                if item_doi == "":
                     errors.append(_('Please specify DOI prefix/suffix.'))
-                elif item_doi_suffix is "":
+                elif item_doi_suffix == "":
                     errors.append(_('Please specify DOI suffix.'))
             else:
                 if item_doi_suffix and existed_doi is False:
@@ -4523,7 +4529,7 @@ def handle_check_duplication_item_id(ids: list):
     """
     result = []
     for element in ids:
-        if element is not "" and ids.count(element) > 1:
+        if element != "" and ids.count(element) > 1:
             result.append(element)
     return list(set(result))
 
@@ -5121,7 +5127,8 @@ def cancel_export_all():
         if not export_status:
             return True
 
-        revoke(task_id, terminate=True)
+        from celery import current_app as current_celery_app
+        current_celery_app.control.revoke(task_id, terminate=True)
 
         json_data = get_redis_cache(_file_create_key)
         if json_data:
@@ -5365,8 +5372,9 @@ def handle_remove_es_metadata(item, bef_metadata, bef_last_ver_metadata):
             indexer.delete_by_id(pid.object_uuid)
         else:
             aft_metadata = indexer.get_metadata_by_item_id(pid.object_uuid)
+            parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
             aft_last_ver_metadata = indexer.get_metadata_by_item_id(
-                PIDVersioning(child=pid).last_child.object_uuid
+                PIDNodeVersioning(pid=parent_pid).last_child.object_uuid
             )
 
             # revert to previous data in ES
@@ -5825,7 +5833,7 @@ def result_download_ui(search_results, input_json, language='en'):
     return send_file(
         f'{export_path}/search_result.tsv',
         as_attachment=True,
-        attachment_filename='search_result.tsv',
+        download_name='search_result.tsv',
         mimetype='text/tab-separated-values'
     )
 

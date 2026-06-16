@@ -22,7 +22,7 @@
 import os
 from enum import Enum
 
-from flask_babelex import lazy_gettext as _
+from flask_babel import lazy_gettext as _
 
 WEKO_RECORDS_UI_DETAIL_TEMPLATE = 'weko_records_ui/detail.html'
 WEKO_RECORDS_UI_BASE_TEMPLATE = 'weko_theme/page.html'
@@ -77,7 +77,7 @@ CSL_STYLES_API_ENDPOINT = '/api/csl/styles'
 CSL_RECORDS_API_ENDPOINT = '/api/record/cites/'
 
 #: Template dirrectory for CSL
-CSL_JSTEMPLATE_DIR = 'node_modules/invenio-csl-js/dist/templates/'
+CSL_JSTEMPLATE_DIR = '/assets/node_modules/invenio-csl-js/dist/templates/'
 
 #: Template for CSL citation result
 CSL_JSTEMPLATE_CITEPROC = 'template/weko_records_ui/invenio_csl/citeproc.html'

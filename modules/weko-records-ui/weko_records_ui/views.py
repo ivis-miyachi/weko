@@ -33,7 +33,7 @@ import six
 import werkzeug
 from flask import Blueprint, abort, current_app, escape, flash, json, \
     jsonify, make_response, redirect, render_template, request, url_for
-from flask_babelex import get_locale, gettext as _
+from flask_babel import get_locale, gettext as _
 from flask_login import login_required
 from flask_security import current_user
 from sqlalchemy.orm.exc import NoResultFound
@@ -43,7 +43,8 @@ from invenio_files_rest.permissions import has_update_version_role
 from invenio_i18n.ext import current_i18n
 from invenio_mail.models import MailTemplateGenres
 from invenio_oaiserver.response import getrecord
-from invenio_pidrelations.contrib.versioning import PIDVersioning
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
+from invenio_pidrelations.models import PIDRelation
 from invenio_pidstore.errors import PIDDoesNotExistError
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_records_ui.signals import record_viewed
@@ -159,7 +160,8 @@ def publish(pid, record, template=None, **kwargs):
     publish_status = record.get('publish_status')
     comm_id = request.values.get('community')
 
-    pid_ver = PIDVersioning(child=pid)
+    parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
+    pid_ver = PIDNodeVersioning(pid=parent_pid)
     last_record = WekoRecord.get_record_by_pid(pid_ver.last_child.pid_value)
     old_record = copy.deepcopy(last_record)
 
@@ -460,12 +462,12 @@ def default_view_method(pid, record, filename=None, template=None, **kwargs):
             if not path_name_dict['ja'][path]:
                 path_name_dict['ja'][path] = path_name_dict['en'][path]
     # Get PID version object to retrieve all versions of item
-    pid_ver = PIDVersioning(child=pid)
-    if not pid_ver.exists or pid_ver.is_last_child:
+    parent_pid = PIDNodeVersioning(pid=pid).parents.one_or_none()
+    pid_ver = PIDNodeVersioning(pid=parent_pid)
+    if parent_pid is None or pid_ver.is_last_child(pid):
         abort(404)
-    active_versions = list(pid_ver.children or [])
-    all_versions = list(pid_ver.get_children(ordered=True, pid_status=PIDStatus.REGISTERED)
-                        or [])
+    active_versions = list(super(PIDNodeVersioning, pid_ver).children or [])
+    all_versions = list(pid_ver.children or [])
     try:
         if WekoRecord.get_record(id_=active_versions[-1].object_uuid)[
                 '_deposit']['status'] == 'draft':
@@ -724,6 +726,13 @@ def default_view_method(pid, record, filename=None, template=None, **kwargs):
     ctx.update({
         "display_community": display_community
     })
+
+    if display_community:
+        from weko_admin.utils import get_community_pages_settings
+        lists = get_community_pages_settings()
+        ctx.update({
+            'lists': lists
+        })
 
     current_app.logger.debug("template :{}".format(template))
 
@@ -1083,11 +1092,10 @@ def doi_ish_view_method(parent_pid_value=0, version=0):
         p_pid = None
 
     if p_pid:
-        pid_ver = PIDVersioning(parent=p_pid)
+        pid_ver = PIDNodeVersioning(pid=p_pid)
         all_versions = list(
-            pid_ver.get_children(
-                ordered=True,
-                pid_status=None))
+            super(PIDNodeVersioning,pid_ver).children.order_by(PIDRelation.index.asc())
+            )
         if version == 0 or version == len(all_versions):
             return redirect(url_for('invenio_records_ui.recid',
                                     pid_value=pid_ver.last_child.pid_value))
@@ -1115,7 +1123,7 @@ def parent_view_method(pid_value=0):
         p_pid = None
 
     if p_pid:
-        pid_version = PIDVersioning(parent=p_pid)
+        pid_version = PIDNodeVersioning(pid=p_pid)
         if pid_version.last_child:
             return redirect(
                 url_for('invenio_records_ui.recid',
@@ -1164,7 +1172,7 @@ def set_pdfcoverpage_header():
             db.session.rollback()
             current_app.logger.error(e)
 
-    return redirect('/admin/pdfcoverpage')
+    return redirect('/admin/pdfcoverpage/')
 
 
 @blueprint.route("/file_version/update", methods=['PUT'])
@@ -1557,4 +1565,3 @@ def replace_file():
         except Exception as e:
             current_app.logger.error(str(e))
             return jsonify({'error': str(e)}), 400
-

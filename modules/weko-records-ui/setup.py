@@ -55,10 +55,11 @@ setup_requires = [
 ]
 
 install_requires = [
-    'Flask-BabelEx>=0.9.2',
+    'Flask-Babel>=3.0.0',
     'invenio-previewer>=1.0.0a11',
     'pypdf>=4.3.1,<5.0.0',
-    'invenio-pidrelations>=1.0.0a3',
+    'PyPDF2>=1.26.0',
+    'invenio-pidrelations>=0.2.0',
     'invenio-records>=1.0.0b4',
 ]
 
@@ -114,6 +115,9 @@ setup(
             'weko_records_ui_bucket_js = weko_records_ui.bundles:bucket_js',
             'weko_records_ui_bootstrap_popover_js = weko_records_ui.bundles:bootstrap_popover_js',
             'weko_records_ui_bootstrap_popover_css = weko_records_ui.bundles:bootstrap_popover_css',
+        ],
+        'invenio_assets.webpack': [
+            'weko_records_ui = weko_records_ui.webpack:weko_records_ui',
         ],
         'invenio_access.actions': [
             'detail_page_access'

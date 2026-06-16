@@ -21,7 +21,7 @@ from invenio_search_ui.ext import InvenioSearchUI
 import pytest
 from mock import Mock, patch
 from flask import Flask
-from flask_babelex import Babel, lazy_gettext as _
+from flask_babel import Babel, lazy_gettext as _
 from flask_celeryext import FlaskCeleryExt
 from flask_menu import Menu
 from flask_login import current_user, login_user, LoginManager
@@ -139,6 +139,8 @@ def base_app(instance_path):
             'S': 'Standard',
             'A': 'Archive',
         },
+        APP_THEME='default',
+        THEME_ICONS={},
         CACHE_REDIS_URL=os.environ.get("CACHE_REDIS_URL", "redis://redis:6379/0"),
         CACHE_REDIS_DB='0',
         CACHE_REDIS_HOST="redis",
@@ -158,7 +160,7 @@ def base_app(instance_path):
         # SQLALCHEMY_DATABASE_URI=os.environ.get(
         #     'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
         SEARCH_ELASTIC_HOSTS=os.environ.get(
-            'SEARCH_ELASTIC_HOSTS', 'elasticsearch'),
+            'SEARCH_ELASTIC_HOSTS', 'opensearch'),
         SQLALCHEMY_TRACK_MODIFICATIONS=True,
         JSONSCHEMAS_HOST='inveniosoftware.org',
         ACCOUNTS_USERINFO_HEADERS=True,
@@ -529,7 +531,16 @@ def i18n_app(app):
         app.extensions['invenio-oauth2server'] = 1
         app.extensions['invenio-queues'] = 1
         yield app
-
+@pytest.yield_fixture()
+def client(app):
+    """make a test client.
+    Args:
+        app (Flask): flask app.
+    Yields:
+        FlaskClient: test client
+    """
+    with app.test_client() as client:
+        yield client
 
 @pytest.yield_fixture()
 def client_rest(app):
@@ -1309,7 +1320,7 @@ def mock_user_ctx(mock_users):
 
 @pytest.yield_fixture()
 def es(app):
-    """Provide elasticsearch access, create and clean indices.
+    """Provide opencsearch access, create and clean indices.
 
     Don't create template so that the test or another fixture can modify the
     enabled events.

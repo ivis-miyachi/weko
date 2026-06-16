@@ -226,7 +226,7 @@ def test_process_item(app, db, esindex, location, db_itemtype, harvest_setting, 
     mock_resource_type_map={
         'conference paper':'Harvesting dc'
     }
-    mocker.patch("invenio_oaiharvester.harvester.RESOURCE_TYPE_MAP",mock_resource_type_map)
+    patch("invenio_oaiharvester.harvester.RESOURCE_TYPE_MAP",mock_resource_type_map)
     # jpcoar
     # mapper.is_deleted is true
     _etree = etree.fromstring('<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"><responseDate>2023-03-01T02:07:10Z</responseDate><request metadataPrefix="oai_dc" identifier="oai:weko3.example.org:00000001" verb="GetRecord">https://192.168.56.103/oai</request><GetRecord><record><header status="deleted"><identifier>oai:weko3.example.org:00000005</identifier><datestamp>2023-02-20T06:24:47Z</datestamp></header></record></GetRecord></OAI-PMH>')
@@ -365,7 +365,7 @@ def test_process_item(app, db, esindex, location, db_itemtype, harvest_setting, 
     _etree = etree.fromstring('<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"><responseDate>2023-03-01T02:07:10Z</responseDate><request metadataPrefix="jpcoar_1.0" identifier="oai:weko3.example.org:00000001" verb="GetRecord">https://192.168.56.103/oai</request><GetRecord><record><header status="deleted"><identifier>oai:weko3.example.org:00000001</identifier><datestamp>2023-02-20T06:24:47Z</datestamp></header></record></GetRecord></OAI-PMH>')
     _records = _etree.findall('./GetRecord/record', namespaces=_etree.nsmap)
     _counter = {}
-    mock_delete = mocker.patch("invenio_oaiharvester.tasks.soft_delete")
+    mock_delete = patch("invenio_oaiharvester.tasks.soft_delete")
     res = process_item(_records[0], harvest_setting[0], _counter, None)
     mock_delete.assert_called_with("1")
     assert res == None
@@ -396,8 +396,8 @@ def test_process_item_for_jpcoar2_coverage_and_no_errors(app, db, esindex, locat
     
 
 # .tox/c1/bin/pytest --cov=invenio_oaiharvester tests/test_tasks.py::test_link_success_handler -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-oaiharvester/.tox/c1/tmp
-def test_link_success_handler(app,mocker):
-    mock_send = mocker.patch("invenio_oaiharvester.tasks.oaiharvest_finished.send")
+def test_link_success_handler(app):
+    mock_send = patch("invenio_oaiharvester.tasks.oaiharvest_finished.send")
     link_success_handler.delay([{"task_id":"test_task"},{"user":"data"}])
     args, kwargs = mock_send.call_args
     assert kwargs["exec_data"] == {"task_id":"test_task"}
@@ -405,7 +405,7 @@ def test_link_success_handler(app,mocker):
     
     
 # .tox/c1/bin/pytest --cov=invenio_oaiharvester tests/test_tasks.py::test_link_error_handler -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-oaiharvester/.tox/c1/tmp
-def test_link_error_handler(app,mocker):
+def test_link_error_handler(app):
     from celery.worker.request import Request
     headers = {
         "id":"test_id",
@@ -419,7 +419,7 @@ def test_link_error_handler(app,mocker):
         delivery_info=None
         properties=None
     req = Request(Message,headers=headers,task="test_task",decoded=True)
-    mock_send = mocker.patch("invenio_oaiharvester.tasks.oaiharvest_finished.send")
+    mock_send = patch("invenio_oaiharvester.tasks.oaiharvest_finished.send")
     link_error_handler(req,None,None)
     args, kwargs = mock_send.call_args
     exec_data = kwargs["exec_data"]
@@ -428,7 +428,7 @@ def test_link_error_handler(app,mocker):
     assert kwargs["user_data"] == "user_data"
 
 # .tox/c1/bin/pytest --cov=invenio_oaiharvester tests/test_tasks.py::test_is_harvest_running -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-oaiharvester/.tox/c1/tmp
-def test_is_harvest_running(app,mocker):
+def test_is_harvest_running(app):
     # return true
     data = {
         "celery@7c520e3d1839":[
@@ -467,8 +467,8 @@ def test_is_harvest_running(app,mocker):
 
 # .tox/c1/bin/pytest --cov=invenio_oaiharvester tests/test_tasks.py::test_run_harvesting -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-oaiharvester/.tox/c1/tmp
 @responses.activate
-def test_run_harvesting(app, db,mocker):
-    mocker.patch("invenio_oaiharvester.tasks.send_run_status_mail")
+def test_run_harvesting(app, db):
+    patch("invenio_oaiharvester.tasks.send_run_status_mail")
     index = Index()
     db.session.add(index)
     db.session.commit()
@@ -600,7 +600,7 @@ def test_run_harvesting(app, db,mocker):
         
 
 # .tox/c1/bin/pytest --cov=invenio_oaiharvester tests/test_tasks.py::test_check_schedules_and_run -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/invenio-oaiharvester/.tox/c1/tmp
-def test_check_schedules_and_run(app,db,mocker):
+def test_check_schedules_and_run(app,db):
     index = Index()
     db.session.add(index)
     db.session.commit()
@@ -637,7 +637,7 @@ def test_check_schedules_and_run(app,db,mocker):
     )
     db.session.add_all([setting1,setting2,setting3])
     db.session.commit()
-    mock_delay = mocker.patch("invenio_oaiharvester.tasks.run_harvesting.delay")
+    mock_delay = patch("invenio_oaiharvester.tasks.run_harvesting.delay")
     check_schedules_and_run.delay()
     mock_delay.assert_called_once()
     args,kwargs = mock_delay.call_args

@@ -11,9 +11,10 @@ import hashlib
 import os
 import shutil
 import tempfile
-
+import copy
 import boto3
 import pytest
+
 from flask import Flask, current_app
 from invenio_app.factory import create_api
 from invenio_db import InvenioDB
@@ -26,7 +27,20 @@ from sqlalchemy_utils.functions import create_database, database_exists
 
 from invenio_s3 import InvenioS3, S3FSFileStorage
 
-
+from weko_deposit.config import (
+    WEKO_BUCKET_QUOTA_SIZE,
+    WEKO_DEPOSIT_REST_ENDPOINTS as _WEKO_DEPOSIT_REST_ENDPOINTS,
+    _PID,
+    DEPOSIT_REST_ENDPOINTS as _DEPOSIT_REST_ENDPOINTS,
+    WEKO_MIMETYPE_WHITELIST_FOR_ES as _WEKO_MIMETYPE_WHITELIST_FOR_ES,
+    WEKO_DEPOSIT_BIBLIOGRAPHIC_INFO_SYS_KEY as _WEKO_DEPOSIT_BIBLIOGRAPHIC_INFO_SYS_KEY
+)
+from weko_indextree_journal.config import (
+    WEKO_INDEXTREE_JOURNAL_REST_ENDPOINTS as _WEKO_INDEXTREE_JOURNAL_REST_ENDPOINTS,
+)
+from weko_schema_ui.config import (
+    WEKO_SCHEMA_REST_ENDPOINTS as _WEKO_SCHEMA_REST_ENDPOINTS,
+)
 @pytest.fixture(scope='module')
 def app_config(app_config):
     """Customize application configuration."""
@@ -191,3 +205,11 @@ def get_md5():
         return "md5:{0}".format(m.hexdigest()) if prefix else m.hexdigest()
 
     return inner
+
+@pytest.fixture(scope='module')
+def celery_config():
+    """Override pytest-invenio fixture.
+
+    TODO: Remove this fixture if you add Celery support.
+    """
+    return {}

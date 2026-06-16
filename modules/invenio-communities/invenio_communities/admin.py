@@ -1,25 +1,10 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2015, 2016 CERN.
+# Copyright (C) 2015-2019 CERN.
 #
-# Invenio is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License as
-# published by the Free Software Foundation; either version 2 of the
-# License, or (at your option) any later version.
-#
-# Invenio is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Invenio; if not, write to the Free Software Foundation, Inc.,
-# 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
-#
-# In applying this license, CERN does not
-# waive the privileges and immunities granted to it by virtue of its status
-# as an Intergovernmental Organization or submit itself to any jurisdiction.
+# Invenio is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
 
 """Admin model views for Communities."""
 
@@ -39,6 +24,7 @@ from flask_login import current_user
 from invenio_accounts.models import Role
 from invenio_db import db
 from sqlalchemy import func, or_
+from weko_index_tree.api import Indexes
 from weko_index_tree.models import Index
 from wtforms.validators import ValidationError, Length
 from wtforms import FileField, RadioField, StringField
@@ -51,7 +37,7 @@ from b2handle.clientcredentials import PIDClientCredentials
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
 
 from .models import Community, FeaturedCommunity, InclusionRequest
-from .utils import get_user_role_ids, delete_empty
+from .utils import get_user_role_ids, get_numeric_user_role_ids, delete_empty
 
 
 def _(x):
@@ -79,8 +65,8 @@ class CommunityModelView(ModelView):
         'ranking',
         'fixed_points',
     )
-
     column_searchable_list = ('id', 'title', 'description')
+
     edit_template = "invenio_communities/admin/edit.html"
 
     @expose('/new/', methods=['GET', 'POST'])
@@ -592,9 +578,10 @@ class CommunityModelView(ModelView):
         which is used when retrieving records for the edit view.
         """
         role_ids = get_user_role_ids()
-
-        if min(role_ids) <= \
-                current_app.config['COMMUNITIES_LIMITED_ROLE_ACCESS_PERMIT']:
+        numeric_role_ids = get_numeric_user_role_ids(role_ids)
+        
+        if (min(numeric_role_ids) <=
+                current_app.config['COMMUNITIES_LIMITED_ROLE_ACCESS_PERMIT']):
             return self.session.query(self.model).filter()
 
         return self.session.query(
@@ -607,16 +594,17 @@ class CommunityModelView(ModelView):
         subquery, so ``query(func.count('*'))`` should be used instead.
         """
         role_ids = get_user_role_ids()
+        numeric_role_ids = get_numeric_user_role_ids(role_ids)
 
-        if min(role_ids) <= \
-                current_app.config['COMMUNITIES_LIMITED_ROLE_ACCESS_PERMIT']:
+        if (min(numeric_role_ids) <=
+                current_app.config['COMMUNITIES_LIMITED_ROLE_ACCESS_PERMIT']):
             return self.session.query(func.count('*')).select_from(self.model)
 
         return self.session.query(
             func.count('*')
         ).select_from(self.model).filter(self.role_query_cond(role_ids))
 
-    def edit_form(self, obj):
+    def edit_form(self, obj=None):
         """
         Instantiate model editing form and return it.
 
@@ -625,15 +613,16 @@ class CommunityModelView(ModelView):
         :param obj: input object
         """
         role_ids = get_user_role_ids()
+        numeric_role_ids = get_numeric_user_role_ids(role_ids)
 
-        if min(role_ids) <= \
-                current_app.config['COMMUNITIES_LIMITED_ROLE_ACCESS_PERMIT']:
-            return super(CommunityModelView, self).edit_form(obj)
-        else:
-            return self._use_append_repository_edit(
-                super(CommunityModelView, self).edit_form(obj),
-                str(obj.index.id)
-            )
+        if (min(numeric_role_ids) <=
+                current_app.config['COMMUNITIES_LIMITED_ROLE_ACCESS_PERMIT']):
+            return super().edit_form(obj)
+
+        return self._use_append_repository_edit(
+            super().edit_form(obj),
+            str(obj.index.id)
+        )
 
     def _use_append_repository_edit(self, form, index_id: str):
         """Modified query_factory of index column.
@@ -648,7 +637,6 @@ class CommunityModelView(ModelView):
 
     def _get_child_index_list(self):
         """Query child indexes."""
-        from weko_index_tree.api import Indexes
         index_id = str(getattr(self, 'index_id', ''))
 
         with db.session.no_autoflush:
@@ -747,20 +735,20 @@ class InclusionRequestModelView(ModelView):
     )
 
 
-community_adminview = dict(
-    model=Community,
-    modelview=CommunityModelView,
-    category=_('Communities'),
-)
+community_adminview = {
+    'model': Community,
+    'modelview': CommunityModelView,
+    'category': _('Communities'),
+}
 
-request_adminview = dict(
-    model=InclusionRequest,
-    modelview=InclusionRequestModelView,
-    category=_('Communities'),
-)
+request_adminview = {
+    'model': InclusionRequest,
+    'modelview': InclusionRequestModelView,
+    'category': _('Communities'),
+}
 
-featured_adminview = dict(
-    model=FeaturedCommunity,
-    modelview=FeaturedCommunityModelView,
-    category=_('Communities'),
-)
+featured_adminview = {
+    'model': FeaturedCommunity,
+    'modelview': FeaturedCommunityModelView,
+    'category': _('Communities'),
+}

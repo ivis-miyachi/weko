@@ -19,6 +19,9 @@
 
 """Module tests."""
 
+import csv
+from io import StringIO
+from unittest import mock
 import pytest
 import uuid
 import os
@@ -26,7 +29,8 @@ import types
 from tests.helpers import json_data, create_record_with_pdf
 from unittest.mock import patch, MagicMock
 from invenio_pidstore.errors import PIDDoesNotExistError
-from weko_authors.models import AuthorsAffiliationSettings,AuthorsPrefixSettings
+from invenio_search.engine import search
+from weko_authors.models import Authors, AuthorsAffiliationSettings,AuthorsPrefixSettings
 from weko_deposit.api import WekoIndexer, WekoDeposit
 from weko_deposit.tasks import (
     update_items_by_authorInfo,
@@ -36,7 +40,10 @@ from weko_deposit.tasks import (
     _get_affiliation_id,
     _change_to_meta,
     _update_author_data,
-    _process
+    _process,
+    get_origin_data,
+    make_stats_file,
+    update_db_es_data,
 )
 from invenio_pidstore.models import PersistentIdentifier
 from sqlalchemy.exc import SQLAlchemyError
@@ -63,13 +70,15 @@ from sqlalchemy.exc import SQLAlchemyError
         }
     },
 ]
+
+# mock Elasticsearch search
 class MockRecordsSearch:
     class MockQuery:
         class MockExecute:
             def __init__(self):
                 pass
             def to_dict(self):
-                record_hit={'hits': {'hits': json_data('data/record_hit1.json'), 'total': 2}}
+                record_hit={'hits': {'hits': json_data('data/record_hit1.json'), 'total': {"value": 2, "relation": "eq"}}}
                 return record_hit
         def __init__(self):
             pass
@@ -81,17 +90,19 @@ class MockRecordsSearch:
     def update_from_dict(self,query=None):
         return self.MockQuery()
 
+# mock the index creation
 class MockRecordIndexer:
     def bulk_index(self, query):
         list(query)
         pass
 
-    def process_bulk_queue(self, es_bulk_kwargs):
+    def process_bulk_queue(self, search_bulk_kwargs):
         pass
 # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::test_update_authorInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-def test_update_authorInfo(app, db, records,mocker):
+def test_update_authorInfo(app, db, location, records):
+# def test_update_authorInfo(app, db, records, authors):
     app.config.update(WEKO_SEARCH_MAX_RESULT=1)
-    mocker.patch("weko_deposit.tasks.WekoDeposit.update_author_link")
+    patch("weko_deposit.tasks.WekoDeposit.update_author_link")
     mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
     with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
         with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
@@ -154,7 +165,6 @@ def test_update_authorInfo(app, db, records,mocker):
     db.session.add(grid)
     db.session.add(ringgold)
     db.session.commit()
-
 
     _target = {
         'authorNameInfo': [
@@ -234,248 +244,58 @@ def test_update_authorInfo(app, db, records,mocker):
     with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
         with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
             update_items_by_authorInfo(["1","xxx"], _target)
-from sqlalchemy.exc import SQLAlchemyError
-from weko_deposit.tasks import _get_author_prefix, _get_affiliation_id, _process, _change_to_meta, _update_author_data, update_items_by_authorInfo
 
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateItemsByAuthorInfo -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-class TestUpdateItemsByAuthorInfo:
-    def test_update_items_by_authorInfo_success(self,  db, app):
-        with patch('weko_deposit.tasks._get_author_prefix') as mock_get_author_prefix, \
-                patch('weko_deposit.tasks._get_affiliation_id') as mock_get_affiliation_id, \
-                patch('weko_deposit.tasks._process') as mock_process, \
-                patch('weko_deposit.tasks.get_origin_data') as mock_get_origin_data, \
-                patch('weko_deposit.tasks.update_db_es_data') as mock_update_db_es_data, \
-                patch('weko_deposit.tasks.delete_cache_data') as mock_delete_cache_data, \
-                patch('weko_deposit.tasks.update_cache_data') as mock_update_cache_data:
-
-            mock_get_author_prefix.return_value = {}
-            mock_get_affiliation_id.return_value = {}
-            mock_process.return_value = (1, False)
-            mock_get_origin_data.return_value = []
-            mock_update_db_es_data.return_value = None
-            mock_delete_cache_data.return_value = None
-            mock_update_cache_data.return_value = None
-
-            user_id = 1
-            target = {"pk_id": "1", "authorIdInfo": [{"idType": "1", "authorId": "weko_id_1", "authorIdShowFlg": "true"}]}
-            origin_pkid_list = ["1"]
-            origin_id_list = ["weko_id_1"]
-            update_gather_flg = True
-            force_change = False
-
-            update_items_by_authorInfo(user_id, target, origin_pkid_list, origin_id_list, update_gather_flg, force_change)
-
-            mock_process.assert_called()
-            mock_get_origin_data.assert_called()
-            mock_update_db_es_data.assert_called()
-            mock_delete_cache_data.assert_called()
-            mock_update_cache_data.assert_called()
-
-    # Test for update_gather_flg = False and 「if not next」
-    def test_update_items_by_authorInfo_success2(self, db, app):
-        with patch('weko_deposit.tasks._get_author_prefix') as mock_get_author_prefix, \
-                patch('weko_deposit.tasks._get_affiliation_id') as mock_get_affiliation_id, \
-                patch('weko_deposit.tasks._process') as mock_process, \
-                patch('weko_deposit.tasks.get_origin_data') as mock_get_origin_data, \
-                patch('weko_deposit.tasks.update_db_es_data') as mock_update_db_es_data, \
-                patch('weko_deposit.tasks.delete_cache_data') as mock_delete_cache_data, \
-                patch('weko_deposit.tasks.update_cache_data') as mock_update_cache_data:
-
-            mock_get_author_prefix.return_value = {}
-            mock_get_affiliation_id.return_value = {}
-            mock_process.side_effect = [(1, True), (2, False)]  # 1度目と2度目のreturn_valueを設定
-            mock_get_origin_data.return_value = []
-            mock_update_db_es_data.return_value = None
-            mock_delete_cache_data.return_value = None
-            mock_update_cache_data.return_value = None
-
-            user_id = 1
-            target = {"pk_id": "1", "authorIdInfo": [{"idType": "1", "authorId": "weko_id_1", "authorIdShowFlg": "true"}]}
-            origin_pkid_list = ["1"]
-            origin_id_list = ["weko_id_1"]
-            update_gather_flg = False
-            force_change = False
-
-            update_items_by_authorInfo(user_id, target, origin_pkid_list, origin_id_list, update_gather_flg, force_change)
-
-            mock_process.assert_called()
-            mock_get_origin_data.assert_not_called()
-            mock_update_db_es_data.assert_not_called()
-            mock_delete_cache_data.assert_not_called()
-            mock_update_cache_data.assert_not_called()
-
-    def test_update_items_by_authorInfo_sqlalchemy_error(self, db, app):
-        with patch('weko_deposit.tasks._get_author_prefix') as mock_get_author_prefix, \
-                patch('weko_deposit.tasks._get_affiliation_id') as mock_get_affiliation_id, \
-                patch('weko_deposit.tasks._process') as mock_process, \
-                patch('weko_deposit.tasks.get_origin_data') as mock_get_origin_data, \
-                patch('weko_deposit.tasks.update_db_es_data') as mock_update_db_es_data, \
-                patch('weko_deposit.tasks.delete_cache_data') as mock_delete_cache_data, \
-                patch('weko_deposit.tasks.update_cache_data') as mock_update_cache_data, \
-                patch('weko_deposit.tasks.db.session.rollback') as mock_db_rollback, \
-                patch('weko_deposit.tasks.update_items_by_authorInfo.retry') as mock_retry:
-
-            mock_get_author_prefix.return_value = {}
-            mock_get_affiliation_id.return_value = {}
-            mock_process.side_effect = SQLAlchemyError("Test SQLAlchemyError")
-            mock_get_origin_data.return_value = []
-            mock_update_db_es_data.return_value = None
-            mock_delete_cache_data.return_value = None
-            mock_update_cache_data.return_value = None
-            mock_db_rollback.return_value = None
-            mock_retry.return_value = None
-
-            user_id = 1
-            target = {"pk_id": "1", "authorIdInfo": [{"idType": "1", "authorId": "weko_id_1", "authorIdShowFlg": "true"}]}
-            origin_pkid_list = ["1"]
-            origin_id_list = ["weko_id_1"]
-            update_gather_flg = True
-            force_change = False
-
-            update_items_by_authorInfo(user_id, target, origin_pkid_list, origin_id_list, update_gather_flg, force_change)
-
-            mock_process.assert_called()
-            mock_db_rollback.assert_called()
-            mock_retry.assert_called()
-
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestGetAuthorPrefix -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-class TestGetAuthorPrefix:
-    def test_get_author_prefix_with_data(self, db):
-        # 条件: AuthorsPrefixSettings テーブルにデータが存在する
-        weko = AuthorsPrefixSettings(
-        id=1,
-        name="WEKO",
-        scheme="WEKO"
-        )
-        orcid = AuthorsPrefixSettings(
-            id=2,
-            name="ORCID",
-            scheme="ORCID",
-            url="https://orcid.org/##"
-        )
-        cinii = AuthorsPrefixSettings(
-            id=3,
-            name="CiNii",
-            scheme="CiNii",
-            url="https://ci.nii.ac.jp/author/"
-        )
-        db.session.add(weko)
-        db.session.add(orcid)
-        db.session.add(cinii)
-
-        # 期待結果: 関数はデータを含む辞書を返す
-        expected_result = {'1': {'scheme': 'WEKO', 'url': None},
-                        '2': {'scheme': 'ORCID', 'url': 'https://orcid.org/##'},
-                        '3': {'scheme': 'CiNii', 'url': 'https://ci.nii.ac.jp/author/'}}
-        assert _get_author_prefix() == expected_result
-
-    def test_get_author_prefix_no_data(self, db):
-        # 条件: AuthorsPrefixSettings テーブルにデータが存在しない
-        # 期待結果: 関数は空の辞書を返す
-        assert _get_author_prefix() == {}
-
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestGetAffiliaitonId -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-class TestGetAffiliaitonId:
-# テストケース1: 正常系 - データが存在する場合
-    def test_get_affiliation_id_with_data(self, db):
-        isni = AuthorsAffiliationSettings(
-            id=1,
-            name="ISNI",
-            scheme="ISNI",
-            url="http://www.isni.org/isni/##"
-        )
-        grid = AuthorsAffiliationSettings(
-            id=2,
-            name="GRID",
-            scheme="GRID",
-            url="https://www.grid.ac/institutes/"
-        )
-        ringgold = AuthorsAffiliationSettings(
-            id=3,
-            name="Ringgold",
-            scheme="Ringgold",
-        )
-        db.session.add(isni)
-        db.session.add(grid)
-        db.session.add(ringgold)
-
-        expected_result = {'1': {'scheme': 'ISNI', 'url': 'http://www.isni.org/isni/##'},
-                        '2': {'scheme': 'GRID', 'url': 'https://www.grid.ac/institutes/'},
-                        '3': {'scheme': 'Ringgold', 'url': None}}
-        assert _get_affiliation_id() == expected_result
-
-    # テストケース2: 正常系 - データが存在しない場合
-    def test_get_affiliation_id_no_data(self, db):
-        assert _get_affiliation_id() == {}
-
-from weko_deposit.api import WekoDeposit
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-class TestProcess:
-
-    class MockWekoDeposit:
-        def __init__(self):
-            self.control_number = '1'
-
-        def get_record(self):
-            return self
-
-        def update_author_link(self):
-            pass
-
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess::test_process_with_data -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-    @patch('weko_deposit.tasks.RecordsSearch')
-    @patch('weko_deposit.tasks._update_author_data')
-    @patch('weko_deposit.tasks.db.session.commit')
-    def test_process_with_data(self, mock_commit, mock_update_author_data, mock_records_search, app, db, mocker):
-        mocker.patch('invenio_indexer.api.RecordIndexer.bulk_index')
-        mocker.patch('invenio_indexer.api.RecordIndexer.process_bulk_queue')
-        with patch('weko_deposit.api.WekoDeposit.get_record', return_value = WekoDeposit({})):
-            mocker.patch('weko_deposit.api.WekoDeposit.update_author_link')
-            # 条件
-            data_size = 10
-            data_from = 0
-            process_counter = {}
-            target = {"pk_id": "1", "authorIdInfo": [{"idType": "1", "authorId": "weko_id_1", "authorIdShowFlg": "true"}]}
-            origin_pkid_list = ["1"]
-            key_map = {...}
-            author_prefix = {...}
-            affiliation_id = {...}
-            force_change = False
-
-            # モックの設定
-            mock_records_search.return_value.update_from_dict.return_value.execute.return_value.to_dict.return_value = {
-                'hits': {
-                    'hits': [{'_source': {'control_number': '1'}}],
-                    'total': 1
-                }
-            }
-            uuid1 = uuid.uuid4()
-            mock_update_author_data.return_value = (uuid1, [uuid1], set(), {})
-
-            # 実行
-            result = _process(data_size, data_from, process_counter, target, origin_pkid_list, key_map, author_prefix, affiliation_id, force_change)
-
-            # 期待結果
-            assert result == (1, False)
-
-            # if data_total > data_size + data_from
-            mock_records_search.return_value.update_from_dict.return_value.execute.return_value.to_dict.return_value = {
-                'hits': {
-                    'hits': [{'_source': {'control_number': '1'}}],
-                    'total': 11
-                }
-            }
-            result = _process(data_size, data_from, process_counter, target, origin_pkid_list, key_map, author_prefix, affiliation_id, force_change)
-            assert result == (1, True)
-
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::test_update_authorInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-def test_update_authorInfo(app, db, records,mocker):
-    app.config.update(WEKO_SEARCH_MAX_RESULT=1)
-    mocker.patch("weko_deposit.tasks.WekoDeposit.update_author_link")
+    # SQLAlchemyError
     mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
     with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
         with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
-            update_items_by_authorInfo(["1","xxx"], {})
+            ex = SQLAlchemyError("test_error")
+            with patch("weko_deposit.tasks.db.session.commit", side_effect=ex):
+                with patch("weko_deposit.tasks.update_items_by_authorInfo.retry") as mock_retry:
+                    with patch("weko_deposit.tasks.weko_logger") as mock_logger:
+                        update_items_by_authorInfo(["1","xxx"], _target)
+                        mock_logger.assert_any_call(key='WEKO_COMMON_DB_SOME_ERROR', ex=ex)
+
+    # Exception
+    mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
+    with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
+        with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
+            ex = Exception("test_exception")
+            with patch("weko_deposit.tasks.db.session.commit", side_effect=ex):
+                with patch("weko_deposit.tasks.update_items_by_authorInfo.retry") as mock_retry:
+                    with patch("weko_deposit.tasks.weko_logger") as mock_logger:
+                        update_items_by_authorInfo(["1","xxx"], _target)
+                        mock_logger.assert_any_call(key='WEKO_COMMON_ERROR_UNEXPECTED', ex=ex)
+
+# def _update_author_data(item_id, record_ids):
+# isinstance(data, dict) and 'nameIdentifiers' in data is False
+def test_update_authorInfo_no_nameIdentifiers(app, db, location, records2):
+    app.config.update(WEKO_SEARCH_MAX_RESULT=1)
+    patch("weko_deposit.tasks.WekoDeposit.update_author_link")
+    mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
+    with patch("weko_deposit.tasks.update_db_es_data") as mock_update_db_es_data:
+        with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
+            with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
+                update_items_by_authorInfo(1, {})
+
+# Test for _update_author_data when for loop continues
+def test_no_creatorNames_contributorNames_names(app, db, location, records3):
+    app.config.update(WEKO_SEARCH_MAX_RESULT=1)
+    patch("weko_deposit.tasks.WekoDeposit.update_author_link")
+    mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
+    with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
+        with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
+            update_items_by_authorInfo(1, {})
+
+# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::test_update_authorInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+def test_update_authorInfo_case1(app, db, location, records):
+# def test_update_authorInfo(app, db, records, authors):
+    app.config.update(WEKO_SEARCH_MAX_RESULT=1)
+    patch("weko_deposit.tasks.WekoDeposit.update_author_link")
+    mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
+    with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
+        with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
+            update_items_by_authorInfo(["1","xxx"], {}, ['xxx', '1', '2'], [], False)
     _target = {
         'authorNameInfo': [
             {'nameShowFlg': False}
@@ -492,7 +312,7 @@ def test_update_authorInfo(app, db, records,mocker):
     mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
     with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
         with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
-            update_items_by_authorInfo(["1","xxx"], _target)
+            update_items_by_authorInfo(["1","xxx"], _target, ['xxx', '1', '2'], [], False)
 
     weko = AuthorsPrefixSettings(
         id=1,
@@ -535,7 +355,6 @@ def test_update_authorInfo(app, db, records,mocker):
     db.session.add(grid)
     db.session.add(ringgold)
     db.session.commit()
-
 
     _target = {
         'authorNameInfo': [
@@ -615,9 +434,11 @@ def test_update_authorInfo(app, db, records,mocker):
     mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
     with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
         with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
-            update_items_by_authorInfo(["1","xxx"], _target)
+            update_items_by_authorInfo(["1","xxx"], _target, ['xxx', '1', '2'], [], False)
 
 
+
+class TestProcess:
 # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess::test_process_no_data -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.RecordsSearch')
     @patch('weko_deposit.tasks._update_author_data')
@@ -710,7 +531,6 @@ def test_update_authorInfo(app, db, records,mocker):
         # 実行と期待結果
         with pytest.raises(Exception):
             _process(data_size, data_from, process_counter, target, origin_pkid_list, key_map, author_prefix, affiliation_id, force_change)
-
 
 # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
 class TestChangeToMeta:
@@ -1033,7 +853,6 @@ class TestChangeToMeta:
         assert target_id == expected_target_id
         assert meta == expected_meta
 
-
 # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
 class TestUpdateAuthorData:
     # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_success -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
@@ -1171,7 +990,6 @@ class TestUpdateAuthorData:
         assert result == (None, set())
         assert process_counter["fail_items"] == [{"record_id": "1", "author_ids": [], "message": "Test Exception"}]
 
-
 class TestUpdateItemsByAuthorInfo:
     # 54702-3
     # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateItemsByAuthorInfo::test_update_authorInfo_not_exists_update_gather_flg -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
@@ -1221,6 +1039,7 @@ class TestUpdateItemsByAuthorInfo:
             origin_pkid_list = ["1"]
             origin_id_list = ["weko_id_1"]
             update_gather_flg = True
+            force_change = False
             update_items_by_authorInfo(user_id, target, origin_pkid_list, origin_id_list, update_gather_flg)
             mock_process.assert_called()
             mock_get_origin_data.assert_called()
@@ -1250,6 +1069,7 @@ class TestUpdateItemsByAuthorInfo:
             origin_pkid_list = ["1"]
             origin_id_list = ["weko_id_1"]
             update_gather_flg = False
+            force_change = False
             update_items_by_authorInfo(user_id, target, origin_pkid_list, origin_id_list, update_gather_flg)
             mock_process.assert_called()
             mock_get_origin_data.assert_not_called()
@@ -1351,11 +1171,11 @@ class TestGetAffiliaitonId:
             with pytest.raises(Exception) as e:
                 _get_affiliation_id()
                 assert str(e.value) == "DB error"
-
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-class TestProcess:
+                
+# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess_Extended -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+class TestProcess_Extended:
     # 54702-21
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess::test_process_with_record_ids -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess_Extended::test_process_with_record_ids -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.RecordsSearch')
     @patch('weko_deposit.tasks._update_author_data')
     @patch('weko_deposit.tasks.db.session.commit')
@@ -1389,7 +1209,7 @@ class TestProcess:
             mock_process_bulk_queue.assert_called()
 
     # 54702-22,23
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess::test_process_compare_data_size -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess_Extended::test_process_compare_data_size -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.RecordsSearch')
     @patch('weko_deposit.tasks._update_author_data')
     @patch('weko_deposit.tasks.db.session.commit')
@@ -1427,7 +1247,7 @@ class TestProcess:
             assert result == (1, False)
 
     # 54702-24
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess::test_process_update_author_data_error -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestProcess_Extended::test_process_update_author_data_error -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.RecordsSearch')
     @patch('weko_deposit.tasks._update_author_data')
     @patch('weko_deposit.tasks.db.session.commit')
@@ -1459,10 +1279,10 @@ class TestProcess:
             result = _process(data_size, data_from, process_counter, target, origin_pkid_list, prepare_key_map, author_prefix, affiliation_id, force_change)
             assert result[0] == 0
 
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-class TestChangeToMeta:
+# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta_Extended -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+class TestChangeToMeta_Extended:
     # 54702-8
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta::test_change_to_meta_empty_target -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta_Extended::test_change_to_meta_empty_target -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     def test_change_to_meta_empty_target(self, app, db, records, mocker, prepare_key_map):
         target = {}
         author_prefix = {}
@@ -1475,7 +1295,7 @@ class TestChangeToMeta:
         assert meta == {}
 
     # 54702-9,10
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta::test_change_to_meta_exists_authorNameInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta_Extended::test_change_to_meta_exists_authorNameInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     def test_change_to_meta_exists_authorNameInfo(self, app, db, records, mocker, prepare_key_map):
         target = {"authorNameInfo": [{"nameShowFlg": True, "familyName": "山田", "firstName": "太郎", "language": "ja"}, {"nameShowFlg": False, "familyName": "Yamada", "firstName": "Taro", "language": "en"}]}
         author_prefix = {}
@@ -1509,7 +1329,7 @@ class TestChangeToMeta:
                 assert meta == {"names":[{"name": "山田, 太郎", "nameLang": "ja"}, {"name": "Yamada, Taro", "nameLang": "en"}], "familyNames": [{"familyName": "山田", "familyNameLang": "ja"}, {"familyName": "Yamada", "familyNameLang": "en"}], "givenNames": [{"givenName": "太郎", "givenNameLang": "ja"}, {"givenName": "Taro", "givenNameLang": "en"}]}
 
     # 54702-11
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta::test_change_to_meta_target_has_empty_list -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta_Extended::test_change_to_meta_target_has_empty_list -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     def test_change_to_meta_target_has_empty_list(self, app, db, records, mocker, prepare_key_map):
         target = {"authorNameInfo": {}, "authorIdInfo": {}, "emailInfo": {}, "affiliationInfo": {}}
         author_prefix = {}
@@ -1522,7 +1342,7 @@ class TestChangeToMeta:
         assert meta == {}
 
     # 54702-12
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta::test_change_to_meta_exists_authorIdInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta_Extended::test_change_to_meta_exists_authorIdInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     def test_change_to_meta_exists_authorIdInfo(self, app, db, records, mocker, prepare_key_map):
         target = {"authorIdInfo": [{"authorIdShowFlg": True, "idType": "-1"}, {"authorIdShowFlg": True, "idType": "1", "authorId": "1"}, {"authorIdShowFlg": True, "idType": "2", "authorId": "0000-0001-0002-0003"}, {"authorIdShowFlg": True, "idType": "3", "authorId": "0000-0001-0002-0003"}, {"authorIdShowFlg": False, "idType": "-1"}]}
         author_prefix = {"1": {"scheme": "WEKO", "url": ""}, "2": {"scheme": "ORCID", "url": "https://orcid.org/##"}, "3": {"scheme": "ISNI", "url": "http://isni.org/isni/"}}
@@ -1534,7 +1354,7 @@ class TestChangeToMeta:
             assert meta == {"nameIdentifiers": [{"nameIdentifierScheme": "WEKO", "nameIdentifier": "1"}, {"nameIdentifierScheme": "ORCID", "nameIdentifier": "0000-0001-0002-0003", "nameIdentifierURI": "https://orcid.org/0000-0001-0002-0003"}, {"nameIdentifierScheme": "ISNI", "nameIdentifier": "0000-0001-0002-0003", "nameIdentifierURI": "http://isni.org/isni/"}]}
 
     # 54702-13
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta::test_change_to_meta_exists_emailInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta_Extended::test_change_to_meta_exists_emailInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     def test_change_to_meta_exists_emailInfo(self, app, db, records, mocker, prepare_key_map):
         target = {"emailInfo": [{"email": "test@nii.co.jp"}]}
         author_prefix = {}
@@ -1552,7 +1372,7 @@ class TestChangeToMeta:
                 assert meta == {"mails": [{"mail": "test@nii.co.jp"}]}
 
     # 54702-14
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta::test_change_to_meta_exists_affiliationInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestChangeToMeta_Extended::test_change_to_meta_exists_affiliationInfo -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     def test_change_to_meta_exists_affiliationInfo(self, app, db, records, mocker, prepare_key_map):
         target = {"affiliationInfo": [{"identifierInfo": [{"identifierShowFlg": False}, {"identifierShowFlg": True, "affiliationIdType": "-1"}, {"identifierShowFlg": True, "affiliationIdType": "1", "affiliationId": "057zh3y96"}, {"identifierShowFlg": True, "affiliationIdType": "2", "affiliationId": "000000012192178X"}, {"identifierShowFlg": True, "affiliationIdType": "3", "affiliationId": "0000000121691048"}], "affiliationNameInfo": [{"affiliationNameShowFlg": False}, {"affiliationNameShowFlg": True, "affiliationName": "The University of Tokyo", "affiliationNameLang": "en"}]}]}
         author_prefix = {}
@@ -1569,10 +1389,10 @@ class TestChangeToMeta:
                 target_id, meta = _change_to_meta(target, author_prefix, affiliation_id, prepare_key_map["full_name"], item_names_data)
                 assert meta == {"affiliations": [{"nameIdentifiers": [{"nameIdentifierScheme": "ROR", "nameIdentifier": "057zh3y96", "nameIdentifierURI": "https://ror.org/057zh3y96"}, {"nameIdentifierScheme": "ISNI", "nameIdentifier": "000000012192178X", "nameIdentifierURI": "http://isni.org/isni/"}, {"nameIdentifierScheme": "kakenhi", "nameIdentifier": "0000000121691048"}], "affiliationNames": [{"affiliationName": "The University of Tokyo", "lang": "en"}]}]}
 
-# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-class TestUpdateAuthorData:
+# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended -v -s -vv --cov-branch --cov-report=html --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+class TestUpdateAuthorData_Extended:
     # 54702-15
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_has_weko_id -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_has_weko_id -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -1620,7 +1440,7 @@ class TestUpdateAuthorData:
         assert process_counter["success_items"] == [{"record_id": "1", "author_ids": [], "message": ""}]
 
     # 54702-16
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_no_weko_id -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_no_weko_id -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -1666,7 +1486,7 @@ class TestUpdateAuthorData:
         assert process_counter["success_items"] == [{"record_id": "1", "author_ids": [], "message": ""}]
 
     # 54702-17
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_contributor_weko_id_not_match -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_contributor_weko_id_not_match -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -1712,7 +1532,7 @@ class TestUpdateAuthorData:
         assert process_counter["success_items"] == [{"record_id": "2", "author_ids": ["2"], "message": ""}]
 
     # 54702-18
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_full_name_weko_id_not_match -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_full_name_weko_id_not_match -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -1763,7 +1583,7 @@ class TestUpdateAuthorData:
         assert process_counter["success_items"] == [{"record_id": "3", "author_ids": [], "message": ""}]
 
     # 54702-19
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_not_match_key_map -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_not_match_key_map -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -1805,7 +1625,7 @@ class TestUpdateAuthorData:
         assert process_counter["success_items"] == [{"record_id": "1", "author_ids": [], "message": ""}]
 
     # 54702-20
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_scheme_is_not_WEKO -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_scheme_is_not_WEKO -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -1850,7 +1670,7 @@ class TestUpdateAuthorData:
         assert process_counter["success_items"] == [{"record_id": "1", "author_ids": [], "message": ""}]
 
     # 54702-29
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_pid_not_exist -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_pid_not_exist -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -1874,7 +1694,7 @@ class TestUpdateAuthorData:
         assert process_counter["fail_items"] == [{"record_id": "1", "author_ids": [], "message": "PID 1 does not exist."}]
 
     # 54702-30
-    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData::test_update_author_data_exception -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
+    # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::TestUpdateAuthorData_Extended::test_update_author_data_exception -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
     @patch('weko_deposit.tasks.PersistentIdentifier.get')
     @patch('weko_deposit.tasks.WekoDeposit.get_record')
     @patch('weko_deposit.tasks.ItemsMetadata.get_record')
@@ -2053,7 +1873,6 @@ def test_extract_pdf_and_update_file_contents_cases(monkeypatch, tika_path, isfi
         if expect_error_attr and expect_error_attr is not Exception:
             assert hasattr(monkeypatch, expect_error_attr)
 
-
 # .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::test_update_file_content_cases -v -s -vv --cov-branch --cov-report=term --cov-config=tox.ini --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
 @pytest.mark.parametrize("content, file_datas, expected", [
     ([{'filename': 'f1', 'attachment': {'content': ''}}, {'filename': 'f2', 'attachment': {'content': ''}}, {'filename': 'f3'}], {'f1': 'abc', 'f2': 'def'}, ['abc', 'def', None]),
@@ -2088,3 +1907,228 @@ def test_update_file_content_cases(monkeypatch, content, file_datas, expected):
                 assert result[i].get('attachment', {}).get('content') == exp
             else:
                 assert 'attachment' not in result[i] or result[i]['attachment'].get('content') == ''
+
+# update_gather_flg = True
+def test_update_authorInfo_with_update_gather_flg(app, db, location, records):
+    app.config.update(WEKO_SEARCH_MAX_RESULT=1)
+    patch("weko_deposit.tasks.WekoDeposit.update_author_link")
+    _target = {
+        'authorNameInfo': [
+            {'nameShowFlg': False},
+            {'nameShowFlg': True, 'familyName': 'Test Fname', 'firstName': 'Test Gname', 'language': 'en'}
+        ],
+        'affiliationInfo': [
+            {
+                'affiliationNameInfo': [
+                    {'affiliationNameShowFlg': False},
+                    {'affiliationName': 'A01', 'affiliationNameLang': 'en'}
+                ]
+            }
+        ],
+        'emailInfo': [
+            {'email': 'test@nii.ac.jp'}
+        ]
+    }
+    mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
+    with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
+        with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
+            with patch("weko_deposit.tasks.get_origin_data", return_value={}):
+                with patch("weko_deposit.tasks.update_db_es_data") as mock_update_db_es_data:
+                    with patch("weko_deposit.tasks.delete_cache_data") as mock_delete_cache_data:
+                        with patch("weko_deposit.tasks.update_cache_data") as mock_update_cache_data:
+                            with patch("weko_deposit.tasks.weko_logger") as mock_logger:
+                                    update_items_by_authorInfo(["1","xxx"], _target, ['xxx', '1', '2'], [], True)
+                                    mock_logger.assert_any_call(key='WEKO_COMMON_IF_ENTER', branch='update_gather_flg is not empty')
+                                    mock_update_db_es_data.assert_called_once()
+                                    mock_delete_cache_data.assert_called_once_with("update_items_by_authorInfo_['1', 'xxx']")
+                                    mock_update_cache_data.assert_called_once()
+
+# def update_items_by_authorInfo(user_id, target, origin_pkid_list=[], origin_id_list=[], update_gather_flg=False):
+#   def _update_author_data(item_id, record_ids):
+# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::test_update_author_data -vv -s --cov-branch --cov-report=html --cov-report=term --basetemp=/code/modules/weko-deposit/.tox/c1/tmp --full-trace
+def test_update_author_data(app, db, es_records):
+    pid_value = es_records[1][0]["deposit"].pid.pid_value
+    mock_recordssearch = MagicMock(side_effect=MockRecordsSearch)
+    with patch("weko_deposit.tasks.RecordsSearch", mock_recordssearch):
+        with patch("weko_deposit.tasks.RecordIndexer", MockRecordIndexer):
+            patch("weko_deposit.tasks.WekoDeposit.update_author_link")
+            ex = PIDDoesNotExistError(pid_type='recid', pid_value=pid_value)
+            with patch("weko_deposit.tasks.PersistentIdentifier.get", side_effect=ex) as mock_pid:
+                with patch("weko_deposit.tasks.weko_logger")as mock_logger:
+                    update_items_by_authorInfo(["1","xxx"], {})
+                    mock_logger.assert_any_call(key='WEKO_COMMON_RETURN_VALUE', value=mock.ANY)
+                    mock_logger.assert_any_call(key='WEKO_COMMON_WHILE_START')
+                    mock_logger.assert_any_call(key='WEKO_COMMON_FOR_START')
+                    mock_logger.assert_any_call(count=mock.ANY, element=mock.ANY, key='WEKO_COMMON_WHILE_LOOP_ITERATION')
+                    mock_logger.assert_any_call(ex=ex, key='WEKO_DEPOSIT_PID_STATUS_NOT_REGISTERED', pid=mock.ANY)
+                    mock_logger.assert_any_call(key='WEKO_COMMON_FOR_END')
+                    mock_logger.assert_called_with(key='WEKO_COMMON_WHILE_END')
+
+            ex = SQLAlchemyError()
+            with patch("weko_deposit.tasks.PersistentIdentifier.get", side_effect=ex) as mock_pid:
+                with patch("weko_deposit.tasks.weko_logger")as mock_logger:
+                    update_items_by_authorInfo(["1","xxx"], {})
+                    mock_logger.assert_any_call(key='WEKO_COMMON_RETURN_VALUE', value=mock.ANY)
+                    mock_logger.assert_any_call(key='WEKO_COMMON_WHILE_START')
+                    mock_logger.assert_any_call(key='WEKO_COMMON_FOR_START')
+                    mock_logger.assert_any_call(count=mock.ANY, element=mock.ANY, key='WEKO_COMMON_WHILE_LOOP_ITERATION')
+                    mock_logger.assert_any_call(ex=ex, key='WEKO_COMMON_DB_SOME_ERROR')
+                    mock_logger.assert_any_call(key='WEKO_COMMON_RETURN_VALUE', value=(None, set()))
+                    mock_logger.assert_any_call(key='WEKO_COMMON_FOR_END')
+                    mock_logger.assert_called_with(key='WEKO_COMMON_WHILE_END')
+
+            ex = Exception()
+            with patch("weko_deposit.tasks.PersistentIdentifier.get", side_effect=ex) as mock_pid:
+                with patch("weko_deposit.tasks.weko_logger")as mock_logger:
+                    update_items_by_authorInfo(["1","xxx"], {})
+                    mock_logger.assert_any_call(key='WEKO_COMMON_RETURN_VALUE', value=mock.ANY)
+                    mock_logger.assert_any_call(key='WEKO_COMMON_WHILE_START')
+                    mock_logger.assert_any_call(key='WEKO_COMMON_FOR_START')
+                    mock_logger.assert_any_call(count=mock.ANY, element=mock.ANY, key='WEKO_COMMON_WHILE_LOOP_ITERATION')
+                    mock_logger.assert_any_call(ex=ex, key='WEKO_COMMON_ERROR_UNEXPECTED')
+                    mock_logger.assert_any_call(key='WEKO_COMMON_RETURN_VALUE', value=(None, set()))
+                    mock_logger.assert_any_call(key='WEKO_COMMON_FOR_END')
+                    mock_logger.assert_called_with(key='WEKO_COMMON_WHILE_END')
+
+# def get_origin_data(origin_pkid_list):
+# .tox/c1/bin/pytest --cov=weko_deposit tests/test_tasks.py::test_get_origin_data -vv -s --cov-branch --cov-report=html --cov-report=term --basetemp=/code/modules/weko-deposit/.tox/c1/tmp --full-trace
+def test_get_origin_data(app, db):
+    origin_pkid_list = [1, 2]
+    db.session.add(Authors(
+            id=1,
+            json={"name": "Test Fname"},
+            is_deleted=False
+        ))
+    db.session.add(Authors(
+            id=2,
+            json={"name": "Test Gname"},
+            is_deleted=False
+        ))
+    db.session.commit()
+
+    result = get_origin_data(origin_pkid_list)
+    expected_result = [{"name": "Test Fname"}, {"name": "Test Gname"}]
+    assert result == expected_result
+
+    result = get_origin_data([5])
+    assert result == []
+
+# def update_db_es_data(origin_pkid_list, origin_id_list):
+def test_update_db_es_data(app, db,esindex, es_records,authors):
+    authors_db = Authors.query.all()
+    origin_id_list=[]
+    for author in authors_db:
+        origin_id_list.append(author.json["id"])
+    origin_pkid_list = [1, 2]
+
+    update_db_es_data(origin_pkid_list, origin_id_list)
+    author1 = db.session.query(Authors).filter(Authors.id == 1).first()
+    author2 = db.session.query(Authors).filter(Authors.id == 2).first()
+    assert author1.gather_flg == 1
+    assert author2.gather_flg == 1
+    from flask import current_app
+    current_app.config["WEKO_AUTHORS_ES_DOC_TYPE"]="wrong_doctype"
+
+    # SQLAlchemyError by db.session.commit()
+    ex = SQLAlchemyError("test_error")
+    with patch("weko_deposit.tasks.db.session.commit", side_effect=ex):
+        with patch("weko_deposit.tasks.weko_logger") as mock_logger:
+            update_db_es_data(origin_pkid_list, origin_id_list)
+            mock_logger.assert_any_call(key='WEKO_COMMON_DB_SOME_ERROR', ex=ex)
+
+    # ElasticsearchException by indexer.client.update()
+    ex = search.OpenSearchException("test_elasticsearch_error")
+    with patch("invenio_search.ext.Elasticsearch.update", side_effect=ex):
+        with patch("weko_deposit.tasks.weko_logger") as mock_logger:
+            update_db_es_data(origin_pkid_list, origin_id_list)
+            mock_logger.assert_any_call(key='WEKO_COMMON_ERROR_ELASTICSEARCH', ex=ex)
+
+    # Exception by indexer.client.update()
+    ex = Exception("test_exception")
+    with patch("invenio_search.ext.Elasticsearch.update", side_effect=ex):
+        with patch("weko_deposit.tasks.weko_logger") as mock_logger:
+            update_db_es_data(origin_pkid_list, origin_id_list)
+            mock_logger.assert_any_call(key='WEKO_COMMON_ERROR_UNEXPECTED', ex=ex)
+
+# def make_stats_file(raw_stats):
+def test_make_stats_file(app, db):
+    TARGET_LABEL = 'target'
+    # file_format is tsv
+    # success_items and fail_items is empty
+    raw_stats = {
+        "target": {},
+        "origin": [],
+        "success_items": [],
+        "fail_items": []
+    }
+    file = StringIO()
+    writer = csv.writer(file, delimiter="\t", lineterminator="\n")
+    writer.writerow(["[TARGET]"])
+    writer.writerow([])
+    writer.writerow([])
+    writer.writerow("")
+    writer.writerow(["[ORIGIN]"])
+    writer.writerow("")
+    writer.writerow(["[SUCCESS]"])
+    writer.writerow("")
+    writer.writerow(["[FAIL]"])
+
+    result = make_stats_file(raw_stats)
+    assert result.getvalue() == file.getvalue()
+
+    # file_format is csv
+    app.config.update(WEKO_ADMIN_OUTPUT_FORMAT='csv')
+    # success_items and fail_items is not empty
+    raw_stats = {
+        "target": {
+            "target_key1": "target_value1",
+            "target_key2": "target_value2"
+        },
+        "origin": [{}, {}],
+        "success_items": [
+            {
+                "record_id":"test_id1",
+                "author_ids":"test_id2",
+                "message":"test_message"
+            },
+            {
+                "record_id":"test_id3",
+                "author_ids":"test_id4",
+                "message":"test_message"
+            }],
+        "fail_items": [
+            {
+                "record_id":"test_id5",
+                "author_ids":"test_id6",
+                "message":"test_message"
+            },
+            {
+                "record_id":"test_id7",
+                "author_ids":"test_id8",
+                "message":"test_message"
+            }]
+    }
+    file = StringIO()
+    writer = csv.writer(file, delimiter=",", lineterminator="\n")
+    writer.writerow(["[TARGET]"])
+    writer.writerow(["target_key1", "target_key2"])
+    writer.writerow(["target_value1", "target_value2"])
+    writer.writerow("")
+    writer.writerow(["[ORIGIN]"])
+    writer.writerow([])
+    writer.writerow([])
+    writer.writerow([])
+    writer.writerow([])
+    writer.writerow("")
+    writer.writerow(["[SUCCESS]"])
+    writer.writerow(["record_id", "author_ids", "message"])
+    writer.writerow(["test_id1", "test_id2", "test_message"])
+    writer.writerow(["test_id3", "test_id4", "test_message"])
+    writer.writerow("")
+    writer.writerow(["[FAIL]"])
+    writer.writerow(["record_id", "author_ids", "message"])
+    writer.writerow(["test_id5", "test_id6", "test_message"])
+    writer.writerow(["test_id7", "test_id8", "test_message"])
+
+    result = make_stats_file(raw_stats)
+    assert result.getvalue() == file.getvalue()

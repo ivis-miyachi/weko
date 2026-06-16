@@ -1,209 +1,125 @@
 import pytest
 import json
+from unittest import mock
+from unittest.mock import patch
 import uuid
-from mock import patch
-from tests.helpers import create_record, json_data
 from collections import OrderedDict
-from invenio_accounts.models import User
-from invenio_records.models import RecordMetadata
-from invenio_pidstore.models import PersistentIdentifier, PIDStatus
-from invenio_pidrelations.models import PIDRelation
+from sqlalchemy.exc import SQLAlchemyError
+
+from invenio_pidstore.models import PIDStatus
+
+from weko_records.errors import WekoRecordsError
 from weko_records.models import FeedbackMailList
 from weko_deposit.receivers import append_file_content
 from weko_records.api import WekoRecord, ItemsMetadata
 from weko_deposit.api import WekoDeposit, WekoRecord as DepositWekoRecord
 
+
 # def append_file_content(sender, json=None, record=None, index=None, **kwargs):
 # .tox/c1/bin/pytest --cov=weko_deposit tests/test_receivers.py::test_append_file_content -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-deposit/.tox/c1/tmp
-def test_append_file_content(app, db, db_itemtype, users, db_userprofile, es_records, mocker):
-    recid = es_records[1][0]['recid']
-    depid = es_records[1][0]['depid']
-    deposit = es_records[1][0]['deposit']
-    indexer = es_records[0]
-
-    user = User.query.filter_by(email="sysadmin@test.org").first()
-    mocker.patch("flask_login.utils._get_user", return_value=user)
-    with patch("flask_security.current_user", return_value=user):
-        # from six import BytesIO
-        from invenio_files_rest.models import Bucket, ObjectVersion
-        from invenio_records_files.models import RecordsBuckets
-        import base64
-        from six import BytesIO
-        # filesあり
-        record = DepositWekoRecord.get_record_by_pid(1)
-
-        b = Bucket.create()
-        r = RecordsBuckets.create(record=record.model, bucket=b)
-        stream = BytesIO(b'Hello, World')
-        record.files['hello.txt'] = stream
-        obj=ObjectVersion.create(bucket=b.id, key='hello.txt', stream=stream)
-
-        record['item_1617605131499']['attribute_value_mlt'][0]['file'] = (base64.b64encode(stream.getvalue())).decode('utf-8')
-        record['item_1617605131499']['attribute_value_mlt'][0]['version_id'] = str(obj.version_id)
-        record.commit()
-
-        deposit = WekoDeposit(record, record.model)
-        deposit.commit()
-
-        es_records[1][0]['record_data']['content']= [{"date":[{"dateValue":"2021-07-12","dateType":"Available"}],
-                                                                "accessrole":"open_access",
-                                                                "displaytype" : "simple",
-                                                                "filename" : "hello.txt",
-                                                                "attachment" : {},
-                                                                "format" : "text/plain",
-                                                                "mimetype" : "text/plain",
-                                                                "filesize" : [{"value" : "1 KB"}],
-                                                                "version_id" : "{}".format(obj.version_id),
-                                                                "url" : {"url":"http://localhost/record/{1}/files/hello.txt"},
-                                                                "file":(base64.b64encode(stream.getvalue())).decode('utf-8')}]
-        es_records[0].upload_metadata(es_records[1][0]['record_data'], recid.object_uuid, 1, False)
-
-        db.session.commit()
-
-        json = {
-            "key":"value",
-            "_created":"2022-10-01"
-        }
-        sender={}
+def test_append_file_content(app, db, es_records):
+    #Call append_file_content for the first time, result is None
+    json = {
+        "key":"value",
+        "_created":"2022-10-01"
+    }
+    sender={}
+    with patch("weko_deposit.receivers.weko_logger") as mock_logger:
         res = append_file_content(sender, json, es_records[1][0]['record'])
         assert res==None
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_START')
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_LOOP_ITERATION', count=mock.ANY, element=mock.ANY)
+        mock_logger.assert_any_call(key='WEKO_COMMON_IF_ENTER', branch=mock.ANY)
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_END')
+        mock_logger.assert_any_call(key='WEKO_DEPOSIT_APPEND_FILE_CONTENT', recid=mock.ANY)
+        mock_logger.reset_mock()
 
-        # RecordMetadataのstatusを変更する
-        assert PersistentIdentifier.sync_status(recid, PIDStatus.RESERVED)
-        assert PersistentIdentifier.sync_status(depid, PIDStatus.RESERVED)
-        # WekoRecordデータベース登録
+
+    #add FeedbackMailList to mail
+    obj = es_records[1][0]["recid"]
+    mail = FeedbackMailList(
+        item_id=obj.object_uuid,
+        mail_list=[{"email":"test@test.org"}]
+    )
+    db.session.add(mail)
+    obj.status = "N"
+    db.session.merge(obj)
+    db.session.commit()
+
+    #Call append_file_content for the second time, result is none
+    with patch("weko_deposit.receivers.weko_logger") as mock_logger:
         res = append_file_content(sender, json, es_records[1][0]['record'])
         assert res==None
-        
-        with patch("weko_records.api.FeedbackMailList.get_mail_list_by_item_id", return_value=["xxxxxx@ivis.co.jp"]):
-            ret = append_file_content(sender, json, es_records[1][0]['record'])
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_START')
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_LOOP_ITERATION', count=mock.ANY, element=mock.ANY)
+        mock_logger.assert_any_call(key='WEKO_COMMON_IF_ENTER', branch=mock.ANY)
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_END')
+        mock_logger.assert_any_call(key='WEKO_DEPOSIT_APPEND_FILE_CONTENT', recid=mock.ANY)
+        mock_logger.reset_mock()
+
+    #when record_metadata.status is D
+    obj.status = "D"
+    db.session.merge(obj)
+    db.session.commit()
+    with patch("weko_deposit.receivers.weko_logger") as mock_logger:
+        res = append_file_content(sender, json, es_records[1][0]['record'])
+        assert res==None
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_START')
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_LOOP_ITERATION', count=mock.ANY, element=mock.ANY)
+        mock_logger.assert_any_call(key='WEKO_COMMON_IF_ENTER', branch=mock.ANY)
+        mock_logger.assert_any_call(key='WEKO_COMMON_FOR_END')
+        mock_logger.assert_any_call(key='WEKO_DEPOSIT_APPEND_FILE_CONTENT', recid=mock.ANY)
+        mock_logger.reset_mock()
+
+    with patch("weko_records.api.RequestMailList.get_mail_list_by_item_id", return_value=["xxxxxx@example.com"]):
+        jrc ={'content': True,'type': ['conference paper'], 'title': ['タイトル', 'title'], 'control_number': '1', '_oai': {'id': '1'}, '_item_metadata': OrderedDict([('pubdate', {'attribute_name': 'PubDate', 'attribute_value': '2022-08-20'}), ('item_1617186331708', {'attribute_name': 'Title', 'attribute_value_mlt': [{'subitem_1551255647225': 'タイトル', 'subitem_1551255648112': 'ja'}, {'subitem_1551255647225': 'title', 'subitem_1551255648112': 'en'}]}), ('item_1617258105262', {'attribute_name': 'Resource Type', 'attribute_value_mlt': [{'resourceuri': 'http://purl.org/coar/resource_type/c_5794', 'resourcetype': 'conference paper'}]}), ('item_title', 'title'), ('item_type_id', '1'), ('control_number', '1'), ('author_link', []), ('weko_shared_ids', []), ('owner', 5), ('owners', [5])]), 'itemtype': 'テストアイテムタイプ', 'publish_date': '2022-08-20', 'author_link': [], 'weko_creator_id': '5', 'weko_shared_ids': []}
+        jrc['content']=True
+        with patch("weko_deposit.receivers.json_loader", return_value=["a", jrc, "b"]):
+            ret = append_file_content(sender, json, es_records[1][0]['record'],None,arguments={"pipeline":""})
             assert ret == None
             assert json['weko_shared_ids'] == []
-            
-        # with patch("weko_records.api.FeedbackMailList.get_mail_list_by_item_id", return_value=["xxxxxx@ivis.co.jp"]):
-        with patch("weko_records.api.RequestMailList.get_mail_list_by_item_id", return_value=["xxxxxx@ivis.co.jp"]):
-            jrc ={'content': True,'type': ['conference paper'], 'title': ['タイトル', 'title'], 'control_number': '1', '_oai': {'id': '1'}, '_item_metadata': OrderedDict([('pubdate', {'attribute_name': 'PubDate', 'attribute_value': '2022-08-20'}), ('item_1617186331708', {'attribute_name': 'Title', 'attribute_value_mlt': [{'subitem_1551255647225': 'タイトル', 'subitem_1551255648112': 'ja'}, {'subitem_1551255647225': 'title', 'subitem_1551255648112': 'en'}]}), ('item_1617258105262', {'attribute_name': 'Resource Type', 'attribute_value_mlt': [{'resourceuri': 'http://purl.org/coar/resource_type/c_5794', 'resourcetype': 'conference paper'}]}), ('item_title', 'title'), ('item_type_id', '1'), ('control_number', '1'), ('author_link', []), ('weko_shared_ids', []), ('owner', 5), ('owners', [5])]), 'itemtype': 'テストアイテムタイプ', 'publish_date': '2022-08-20', 'author_link': [], 'weko_creator_id': '5', 'weko_shared_ids': []}
-            jrc['content']=True
-            with patch("weko_deposit.receivers.json_loader", return_value=["a", jrc, "b"]):
-                ret = append_file_content(sender, json, es_records[1][0]['record'],None,arguments={"pipeline":""})
-                assert ret == None
-                assert json['weko_shared_ids'] == []
-                assert json['request_mail_list']
+            assert json['request_mail_list'] == ["xxxxxx@example.com"]
 
-        obj = es_records[1][0]["recid"]
-        mail = FeedbackMailList(
-            item_id=obj.object_uuid,
-            mail_list=[{"email":"test@test.org"}]
-        )
-        db.session.add(mail)
-        obj.status = "N"
-        db.session.merge(obj)
-        db.session.commit()
-        
-        res = append_file_content(sender, json, es_records[1][0]['record'])
-        assert res==None
+    with patch("weko_records.api.RequestMailList.get_mail_list_by_item_id", return_value=[]):
+        jrc ={'content': True,'type': ['conference paper'], 'title': ['タイトル', 'title'], 'control_number': '1', '_oai': {'id': '1'}, '_item_metadata': OrderedDict([('pubdate', {'attribute_name': 'PubDate', 'attribute_value': '2022-08-20'}), ('item_1617186331708', {'attribute_name': 'Title', 'attribute_value_mlt': [{'subitem_1551255647225': 'タイトル', 'subitem_1551255648112': 'ja'}, {'subitem_1551255647225': 'title', 'subitem_1551255648112': 'en'}]}), ('item_1617258105262', {'attribute_name': 'Resource Type', 'attribute_value_mlt': [{'resourceuri': 'http://purl.org/coar/resource_type/c_5794', 'resourcetype': 'conference paper'}]}), ('item_title', 'title'), ('item_type_id', '1'), ('control_number', '1'), ('author_link', []), ('weko_shared_ids', []), ('owner', 5), ('owners', [5])]), 'itemtype': 'テストアイテムタイプ', 'publish_date': '2022-08-20', 'author_link': [], 'weko_creator_id': '5', 'weko_shared_ids': []}
+        jrc['content']=True
+        with patch("weko_deposit.receivers.json_loader", return_value=["a", jrc, "b"]):
+            ret = append_file_content(sender, json, es_records[1][0]['record'],None,arguments={"pipeline":""})
+            assert ret == None
+            assert json['weko_shared_ids'] == []
+            assert json.get('request_mail_list') is None
 
-        with patch("weko_records.api.RequestMailList.get_mail_list_by_item_id", return_value=["xxxxxx@example.com"]):
-            jrc ={'content': True,'type': ['conference paper'], 'title': ['タイトル', 'title'], 'control_number': '1', '_oai': {'id': '1'}, '_item_metadata': OrderedDict([('pubdate', {'attribute_name': 'PubDate', 'attribute_value': '2022-08-20'}), ('item_1617186331708', {'attribute_name': 'Title', 'attribute_value_mlt': [{'subitem_1551255647225': 'タイトル', 'subitem_1551255648112': 'ja'}, {'subitem_1551255647225': 'title', 'subitem_1551255648112': 'en'}]}), ('item_1617258105262', {'attribute_name': 'Resource Type', 'attribute_value_mlt': [{'resourceuri': 'http://purl.org/coar/resource_type/c_5794', 'resourcetype': 'conference paper'}]}), ('item_title', 'title'), ('item_type_id', '1'), ('control_number', '1'), ('author_link', []), ('weko_shared_ids', []), ('owner', 5), ('owners', [5])]), 'itemtype': 'テストアイテムタイプ', 'publish_date': '2022-08-20', 'author_link': [], 'weko_creator_id': '5', 'weko_shared_ids': []}
-            jrc['content']=True
-            with patch("weko_deposit.receivers.json_loader", return_value=["a", jrc, "b"]):
-                ret = append_file_content(sender, json, es_records[1][0]['record'],None,arguments={"pipeline":""})
-                assert ret == None
-                assert json['weko_shared_ids'] == []
-                assert json['request_mail_list'] == ["xxxxxx@example.com"]
 
-        with patch("weko_records.api.RequestMailList.get_mail_list_by_item_id", return_value=[]):
-            jrc ={'content': True,'type': ['conference paper'], 'title': ['タイトル', 'title'], 'control_number': '1', '_oai': {'id': '1'}, '_item_metadata': OrderedDict([('pubdate', {'attribute_name': 'PubDate', 'attribute_value': '2022-08-20'}), ('item_1617186331708', {'attribute_name': 'Title', 'attribute_value_mlt': [{'subitem_1551255647225': 'タイトル', 'subitem_1551255648112': 'ja'}, {'subitem_1551255647225': 'title', 'subitem_1551255648112': 'en'}]}), ('item_1617258105262', {'attribute_name': 'Resource Type', 'attribute_value_mlt': [{'resourceuri': 'http://purl.org/coar/resource_type/c_5794', 'resourcetype': 'conference paper'}]}), ('item_title', 'title'), ('item_type_id', '1'), ('control_number', '1'), ('author_link', []), ('weko_shared_ids', []), ('owner', 5), ('owners', [5])]), 'itemtype': 'テストアイテムタイプ', 'publish_date': '2022-08-20', 'author_link': [], 'weko_creator_id': '5', 'weko_shared_ids': []}
-            jrc['content']=True
-            with patch("weko_deposit.receivers.json_loader", return_value=["a", jrc, "b"]):
-                ret = append_file_content(sender, json, es_records[1][0]['record'],None,arguments={"pipeline":""})
-                assert ret == None
-                assert json['weko_shared_ids'] == []
-                assert json.get('request_mail_list') is None
-
-        """
-        obj = es_records[1][0]["recid"]
-        mail = FeedbackMailList(
-            item_id=obj.object_uuid,
-            mail_list=[{"email":"test@test.org"}]
-        )
-        db.session.add(mail)
-        obj.status = "N"
-        db.session.merge(obj)
-        db.session.commit()
-        
-        res = append_file_content(sender, json, es_records[1][0]['record'])
-        assert res==None
-        
-        with patch("weko_deposit.receivers.FeedbackMailList.get_mail_list_by_item_id",side_effect=Exception("test_error")):
+    obj.status = "N"
+    db.session.merge(obj)
+    db.session.commit()
+    #Throws an exception. Result of append_file_content is None.
+    ex = Exception("test_error")
+    with patch("weko_deposit.receivers.FeedbackMailList.get_mail_list_by_item_id", side_effect=ex):
+        with patch("weko_deposit.receivers.weko_logger") as mock_logger:
             res = append_file_content(sender, json, es_records[1][0]['record'])
             assert res==None
-        
-        json = {'_created':"2023-08-01",
-                '_updated':"2023-08-01",
-                'id':'1'}
-        sender={}
-        
-        rec_uuid = uuid.uuid4()
+            mock_logger.assert_any_call(key='WEKO_COMMON_ERROR_UNEXPECTED', ex=ex)
+            mock_logger.reset_mock()
 
-        recid = PersistentIdentifier.create('recid', "100", object_type='rec', object_uuid=rec_uuid, status=PIDStatus.REGISTERED)
-        depid = PersistentIdentifier.create('depid', "100", object_type='rec', object_uuid=rec_uuid, status=PIDStatus.REGISTERED)
-        rel = PIDRelation.create(recid,depid, 2, 0)
-        es_records[1][0]['record_data']['recid'] = '100'
-        es_records[1][0]['record_data']['_deposit']['id'] = '100'
-        es_records[1][0]['record_data']['_deposit']['pid']['value'] = '100'
-        es_records[1][0]['record_data']['content'] = "content"
-        es_records[1][0]['item_data']['id'] = '100'
-        es_records[1][0]['item_data']['pid']['value'] = '100'
-        rec = WekoRecord.create(es_records[1][0]['record_data'], id_=rec_uuid)
-        dep = WekoDeposit(rec, rec.model)
-        ItemsMetadata.create(es_records[1][0]['item_data'], id_=rec_uuid)
-        rec_meta = RecordMetadata(id=rec_uuid, json=es_records[1][0]['record_data'], version_id=1)
-        record_metadata = RecordMetadata.query.filter_by(id=rec_uuid).first()
+    # SQLAlchemyError
+    ex = SQLAlchemyError("sql_error")
+    with patch("weko_deposit.receivers.WekoDeposit.get_record", side_effect=ex):
+        with patch("weko_deposit.receivers.weko_logger") as mock_logger:
+            append_file_content(sender, json, es_records[1][0]['record'])
+            mock_logger.assert_any_call(key='WEKO_COMMON_DB_SOME_ERROR', ex=ex)
+            mock_logger.reset_mock()
 
-        ret = append_file_content(sender, json, rec)
-        assert ret == None
-        assert json['weko_shared_ids'] == []
+    # WekoRecordsError
+    ex = WekoRecordsError("record_error")
+    with patch("weko_deposit.receivers.WekoDeposit.get_record", side_effect=ex):
+            with pytest.raises(WekoRecordsError):
+                append_file_content(sender, json, es_records[1][0]['record'])
 
-        rec_uuid = uuid.uuid4()
-        recid = PersistentIdentifier.create('recid', "101", object_type='rec', object_uuid=rec_uuid, status=PIDStatus.RESERVED)
-        depid = PersistentIdentifier.create('depid', "101", object_type='rec', object_uuid=rec_uuid, status=PIDStatus.RESERVED)
-        rel = PIDRelation.create(recid,depid, 2, 0)
-        es_records[1][0]['record_data']['recid'] = '101'
-        es_records[1][0]['record_data']['_deposit']['id'] = '101'
-        es_records[1][0]['record_data']['_deposit']['pid']['value'] = '101'
-        es_records[1][0]['item_data']['id'] = '101'
-        es_records[1][0]['item_data']['pid']['value'] = '101'
-        rec = WekoRecord.create(es_records[1][0]['record_data'], id_=rec_uuid)
-        dep = WekoDeposit(rec, rec.model)
-        ItemsMetadata.create(es_records[1][0]['item_data'], id_=rec_uuid)
-        rec_meta = RecordMetadata(id=rec_uuid, json=es_records[1][0]['record_data'], version_id=1)
-        record_metadata = RecordMetadata.query.filter_by(id=rec_uuid).first()
-
-        ret = append_file_content(sender, json, rec)
-        assert ret == None
-        assert json['weko_shared_ids'] == []
-        
-        rec_uuid = uuid.uuid4()
-        recid = PersistentIdentifier.create('recid', "102", object_type='rec', object_uuid=rec_uuid, status=PIDStatus.REGISTERED)
-        depid = PersistentIdentifier.create('depid', "102", object_type='rec', object_uuid=rec_uuid, status=PIDStatus.REGISTERED)
-        rel = PIDRelation.create(recid,depid, 2, 0)
-        es_records[1][0]['record_data']['weko_shared_ids'] = [1,2,3]
-        es_records[1][0]['record_data']['recid'] = '102'
-        es_records[1][0]['record_data']['_deposit']['id'] = '102'
-        es_records[1][0]['record_data']['_deposit']['pid']['value'] = '102'
-        es_records[1][0]['item_data']['id'] = '102'
-        es_records[1][0]['item_data']['pid']['value'] = '102'
-        es_records[1][0]['item_data']['shared_user_ids'] = [1,2,3]
-        es_records[1][0]['record']['weko_shared_ids'] = [1,2,3]
-        rec = WekoRecord.create(es_records[1][0]['record_data'], id_=rec_uuid)
-        dep = WekoDeposit(rec, rec.model)
-        ItemsMetadata.create(es_records[1][0]['item_data'], id_=rec_uuid)
-        rec_meta = RecordMetadata(id=rec_uuid, json=es_records[1][0]['record_data'], version_id=1)
-        record_metadata = RecordMetadata.query.filter_by(id=rec_uuid).first()
-        
-        with patch("weko_records.api.FeedbackMailList.get_mail_list_by_item_id", return_value=["xxxxxx@ivis.co.jp"]):
-            ret = append_file_content(sender, json, rec)
-            assert ret == None
-            assert json['weko_shared_ids'] == [1,2,3]
-        """
+    # Exception
+    ex = Exception("unexpected_error")
+    with patch("weko_deposit.receivers.WekoDeposit.get_record", side_effect=ex):
+        with patch("weko_deposit.receivers.weko_logger") as mock_logger:
+            append_file_content(sender, json, es_records[1][0]['record'])
+            mock_logger.assert_any_call(key='WEKO_COMMON_ERROR_UNEXPECTED', ex=ex)
+            mock_logger.reset_mock()

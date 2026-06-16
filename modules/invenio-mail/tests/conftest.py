@@ -6,10 +6,7 @@
 # Invenio is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-
 """Pytest configuration."""
-
-from __future__ import absolute_import, print_function
 
 import os
 import shutil
@@ -23,7 +20,7 @@ from flask_celeryext import FlaskCeleryExt
 from invenio_db import InvenioDB
 from invenio_db import db as db_
 from six import StringIO
-from flask_babelex import Babel
+from flask_babel import Babel
 
 from sqlalchemy_utils.functions import create_database, database_exists, \
     drop_database
@@ -37,6 +34,7 @@ from invenio_access.models import ActionUsers,ActionRoles
 from invenio_accounts import InvenioAccounts
 from invenio_accounts.models import User, Role
 from invenio_accounts.testutils import create_test_user
+from invenio_i18n import InvenioI18N
 
 from invenio_mail import InvenioMail, config
 from invenio_mail.admin import mail_adminview, mail_templates_adminview
@@ -49,7 +47,7 @@ def instance_path():
     path = tempfile.mkdtemp()
     yield path
     shutil.rmtree(path)
-    
+
 @pytest.fixture()
 def base_app(instance_path):
     app_ = Flask('testapp', instance_path=instance_path)
@@ -97,8 +95,9 @@ def base_app(instance_path):
     InvenioDB(app_)
     InvenioAccounts(app_)
     InvenioAccess(app_)
+    InvenioI18N(app_)
     InvenioMail(app_)
-    
+
     app_.jinja_loader.searchpath.append('tests/templates')
     admin = Admin(app_)
     view_class = mail_adminview['view_class']
@@ -119,7 +118,7 @@ def app(base_app):
 def client(app):
     with app.test_client() as client:
         yield client
-        
+
 @pytest.yield_fixture()
 def db(app):
     """Database fixture."""
@@ -156,7 +155,7 @@ def users(app, db):
         originalroleuser = create_test_user(email='originalroleuser@test.org')
         originalroleuser2 = create_test_user(email='originalroleuser2@test.org')
         student = User.query.filter_by(email='student@test.org').first()
-        
+
     role_count = Role.query.filter_by(name='System Administrator').count()
     if role_count != 1:
         sysadmin_role = ds.create_role(name='System Administrator')
@@ -271,7 +270,7 @@ def mail_configs(db):
         id=1,
         mail_server="localhost",
         mail_port=25,
-        
+
     )
     db.session.add(config)
     db.session.commit()
@@ -341,31 +340,31 @@ def email_admin_app():
         drop_database(str(db.engine.url))
     shutil.rmtree(instance_path)
 
-
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def email_task_app(request):
     """Flask application fixture."""
-    app = Flask('testapp')
+    app = Flask("testapp")
     app.config.update(
-        SQLALCHEMY_DATABASE_URI=os.environ.get(
-            'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
+        SQLALCHEMY_DATABASE_URI=os.environ.get("SQLALCHEMY_DATABASE_URI", "sqlite://test.db"),
         CELERY_ALWAYS_EAGER=True,
-        CELERY_RESULT_BACKEND='cache',
-        CELERY_CACHE_BACKEND='memory',
-        CELERY_EAGER_PROPAGATES_EXCEPTIONS=True,
-        MAIL_SUPPRESS_SEND=True
+        CELERY_RESULT_BACKEND="cache",
+        CELERY_CACHE_BACKEND="memory",
+        CELERY_EAGER_PROPAGATES=True,
+        MAIL_SUPPRESS_SEND=True,
+        MAIL_MAX_ATTACHMENT_SIZE=30,
     )
     FlaskCeleryExt(app)
+
     InvenioMail(app, StringIO())
 
     return app
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def email_api_app(email_task_app):
     """Flask application fixture."""
     email_task_app.register_blueprint(
-        Blueprint('invenio_mail_test', __name__, template_folder='templates')
+        Blueprint("invenio_mail_test", __name__, template_folder="templates")
     )
 
     return email_task_app
@@ -375,18 +374,18 @@ def email_api_app(email_task_app):
 def email_params():
     """Email parameters fixture."""
     return {
-        'subject': 'subject',
-        'recipients': ['recipient@inveniosoftware.com'],
-        'sender': 'sender@inveniosoftware.com',
-        'cc': 'cc@inveniosoftware.com',
-        'bcc': 'bcc@inveniosoftware.com',
-        'reply_to': 'reply_to@inveniosoftware.com',
-        'date': datetime.now(),
-        'attachments': [],
-        'charset': None,
-        'extra_headers': None,
-        'mail_options': [],
-        'rcpt_options': [],
+        "subject": "subject",
+        "recipients": ["recipient@inveniosoftware.com"],
+        "sender": "sender@inveniosoftware.com",
+        "cc": "cc@inveniosoftware.com",
+        "bcc": "bcc@inveniosoftware.com",
+        "reply_to": "reply_to@inveniosoftware.com",
+        "date": datetime.now(),
+        "attachments": [],
+        "charset": None,
+        "extra_headers": None,
+        "mail_options": [],
+        "rcpt_options": [],
     }
 
 
@@ -394,9 +393,9 @@ def email_params():
 def email_ctx():
     """Email context fixture."""
     return {
-        'user': 'User',
-        'content': 'This a content.',
-        'sender': 'sender',
+        "user": "User",
+        "content": "This a content.",
+        "sender": "sender",
     }
 
 @pytest.fixture

@@ -36,11 +36,11 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
-from elasticsearch import Elasticsearch
-from elasticsearch.client.ingest import IngestClient
+from opensearchpy import OpenSearch
+from opensearchpy.client.ingest import IngestClient
 from flask import Blueprint, Flask
 from flask_assets import assets
-from flask_babelex import Babel
+from flask_babel import Babel
 from flask_login import LoginManager, UserMixin
 from flask_menu import Menu
 from invenio_access import InvenioAccess
@@ -48,14 +48,12 @@ from invenio_access.models import ActionRoles, ActionUsers
 from invenio_accounts import InvenioAccounts
 from invenio_accounts.models import Role, User
 from invenio_accounts.testutils import create_test_user, login_user_via_session
-from invenio_accounts.views.settings import blueprint as invenio_accounts_blueprint
 from invenio_admin import InvenioAdmin
 from invenio_admin.views import blueprint as invenio_admin_blueprint
 from invenio_assets import InvenioAssets
-from invenio_assets.cli import collect, npm
+from invenio_assets.cli import collect
 from invenio_cache import InvenioCache
 from invenio_communities import InvenioCommunities
-from invenio_communities.views.ui import blueprint as invenio_communities_blueprint
 from invenio_db import InvenioDB
 from invenio_db import db as db_
 from invenio_deposit import InvenioDeposit
@@ -70,8 +68,8 @@ from invenio_oaiserver.models import Identify
 from invenio_oaiserver.views.server import blueprint as invenio_oaiserver_blueprint
 from invenio_oauth2server import InvenioOAuth2Server
 from invenio_pidrelations import InvenioPIDRelations
-from invenio_pidrelations.contrib.records import RecordDraft
-from invenio_pidrelations.contrib.versioning import PIDVersioning
+from invenio_pidrelations.contrib.draft import PIDNodeDraft
+from invenio_pidrelations.contrib.versioning import PIDNodeVersioning
 from invenio_pidrelations.models import PIDRelation
 from invenio_pidstore import InvenioPIDStore
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus, Redirect
@@ -216,7 +214,7 @@ def base_app(instance_path):
     WEKO_DEPOSIT_REST_ENDPOINTS["depid"][
         "pub_route"
     ] = "/deposits/publish/<{0}:pid_value>".format(_PID)
-    
+
     app_.config.update(
         SECRET_KEY="SECRET_KEY",
         SERVER_NAME="test_server",
@@ -256,7 +254,12 @@ def base_app(instance_path):
         INDEXER_DEFAULT_DOCTYPE="item-v1.0.0",
         INDEXER_DEFAULT_DOC_TYPE="item-v1.0.0",
         INDEXER_FILE_DOC_TYPE="content",
-        SEARCH_ELASTIC_HOSTS="elasticsearch",
+        SEARCH_ELASTIC_HOSTS=os.environ.get('SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_CLIENT_CONFIG={
+            "http_auth":(os.environ.get('INVENIO_OPENSEARCH_USER', 'invenio'),os.environ.get('INVENIO_OPENSEARCH_PASS', 'openpass123!')),
+            "use_ssl":True,
+            "verify_certs":False
+        },
         SEARCH_INDEX_PREFIX="test-",
         WEKO_BUCKET_QUOTA_SIZE=50 * 1024 * 1024 * 1024,
         WEKO_MAX_FILE_SIZE=50 * 1024 * 1024 * 1024,
@@ -277,6 +280,7 @@ def base_app(instance_path):
     InvenioAdmin(app_)
     InvenioDB(app_)
     InvenioCache(app_)
+    InvenioI18N(app_)
     InvenioOAuth2Server(app_)
     InvenioPIDStore(app_)
     InvenioPIDRelations(app_)
@@ -303,10 +307,10 @@ def base_app(instance_path):
     WekoDeposit(app_)
     WekoDepositREST(app_)
     # app_.register_blueprint(weko_schema_ui_blueprint)
-    app_.register_blueprint(weko_records_ui_blueprint)
+    # app_.register_blueprint(weko_records_ui_blueprint)
     app_.register_blueprint(invenio_files_rest_blueprint)  # invenio_files_rest
     app_.register_blueprint(invenio_oaiserver_blueprint)
-    
+
     current_assets = LocalProxy(lambda: app_.extensions["invenio-assets"])
     current_assets.collect.collect()
 
@@ -538,7 +542,7 @@ def db_oaischema(app, db):
     )
 
     schema_name = "jpcoar_mapping"
-    
+
     form_data = dict()
     with open("tests/data/oaischema/jpcoar_mapping_form_data.json", "r") as f:
         form_data = json.load(f)
@@ -550,7 +554,7 @@ def db_oaischema(app, db):
     namespaces = dict()
     with open("tests/data/oaischema/jpcoar_mapping_namespaces.json", "r") as f:
         namespaces = json.load(f)
-    
+
     schema_location = "https://github.com/JPCOAR/schema/blob/master/2.0/jpcoar_scm.xsd"
     jpcoarv2 = OAIServerSchema(
         id=uuid.uuid4(),
@@ -566,7 +570,7 @@ def db_oaischema(app, db):
     )
 
     schema_name = "jpcoar_v1_mapping"
-    
+
     form_data = dict()
     with open("tests/data/oaischema/jpcoar_v1_mapping_form_data.json", "r") as f:
         form_data = json.load(f)
@@ -621,7 +625,7 @@ def db_oaischema(app, db):
         target_namespace="oai_dc",
     )
 
-    
+
     with db.session.begin_nested():
         db.session.add(ddi25)
         db.session.add(jpcoarv1)
@@ -738,8 +742,8 @@ def esindex(app):
         current_search_client.indices.put_alias(
             index=app.config["INDEXER_DEFAULT_INDEX"], name="test-weko"
         )
-        
-        es = Elasticsearch(
+
+        es = OpenSearch(
             [app.config['SEARCH_ELASTIC_HOSTS']],
             scheme="http",
             port=9200
@@ -914,7 +918,7 @@ def records(app, db, esindex, indextree, location, itemtypes, db_oaischema):
         mimetype = "application/pdf"
         filepath = "tests/data/helloworld.pdf"
         results.append(make_record(db, indexer, i, filepath, filename, mimetype))
-        
+
         i = 2
         filename = "helloworld.docx"
         mimetype = (
@@ -2163,11 +2167,11 @@ def make_record(db, indexer, i, filepath, filename, mimetype):
         status=PIDStatus.REGISTERED,
     )
 
-    h1 = PIDVersioning(parent=parent)
-    h1.insert_child(child=recid)
-    h1.insert_child(child=recid_v1)
-    RecordDraft.link(recid, depid)
-    RecordDraft.link(recid_v1, depid_v1)
+    h1 = PIDNodeVersioning(pid=parent)
+    h1.insert_child(child_pid=recid)
+    h1.insert_child(child_pid=recid_v1)
+    PIDNodeDraft(pid=recid).insert_child(depid)
+    PIDNodeDraft(pid=recid_v1).insert_child(depid_v1)
 
     if i % 2 == 1:
         doi = PersistentIdentifier.create(
@@ -2227,7 +2231,7 @@ def make_record(db, indexer, i, filepath, filename, mimetype):
         }
     ]
     indexer.upload_metadata(record_data, rec_uuid, 1, False)
-    
+
     item = ItemsMetadata.create(item_data, id_=rec_uuid, item_type_id=1)
 
     record_v1 = WekoRecord.create(record_data, id_=rec_uuid2)

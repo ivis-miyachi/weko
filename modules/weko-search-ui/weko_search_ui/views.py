@@ -26,7 +26,7 @@ from xml.etree import ElementTree
 
 from blinker import Namespace
 from flask import Blueprint, current_app, flash, jsonify, render_template, request
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import login_required
 from flask_security import current_user
 from flask_wtf import FlaskForm
@@ -277,6 +277,12 @@ def search():
             .get("status", False)
         )
         ctx.update({"display_community": display_community})
+        if display_community:
+            from weko_admin.utils import get_community_pages_settings
+            lists = get_community_pages_settings()
+            ctx.update({
+                'lists': lists
+            })
 
         return render_template(
             current_app.config["SEARCH_UI_SEARCH_TEMPLATE"],

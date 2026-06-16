@@ -9,10 +9,11 @@
 
 import csv
 import json
+import logging
 import traceback
 import zipfile
+from celery import current_app as current_celery_app
 from celery.result import AsyncResult
-from celery.task.control import revoke
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from flask import current_app
@@ -102,7 +103,7 @@ class UserActivityLogUtils:
             export_status = cls.get_export_task_status()
             if export_status:
                 task_id = export_status.get("task_id")
-                revoke(task_id, terminate=True)
+                current_celery_app.control.revoke(task_id, terminate=True)
                 state = AsyncResult(task_id).state
                 if state == "REVOKED":
                     cls.clear_export_status()
@@ -238,3 +239,58 @@ class UserActivityLogUtils:
         tsv = stream.getvalue()
         stream.close()
         return tsv
+
+
+"""Logging utils."""
+
+class WekoLoggingFilter(logging.Filter):
+    """Filter for loggers."""
+
+    def filter(self, record):
+        """Filter log record.
+
+        Override the filter method to add user_id and ip_address to \
+            log record.
+        """
+        from weko_accounts.utils import get_remote_addr
+
+        record.user_id = get_current_user_id()
+        record.ip_address = get_remote_addr()
+
+        # If the user is not authenticated, set the user_id to 'Guest'
+        if (record.ip_address is not None) and (record.user_id is None):
+            record.user_id = 'Guest'
+
+        # Replace the attribute name of the log record
+        if hasattr(record, 'wpathname'):
+            record.pathname = record.wpathname
+        if hasattr(record, 'wlineno'):
+            record.lineno = record.wlineno
+        if hasattr(record, 'wfuncName'):
+            record.funcName = record.wfuncName
+
+        return True
+
+
+wekoLoggingFilter = WekoLoggingFilter()
+
+
+def get_current_user_id():
+    """Get current user id.
+
+    Method to get the user id of the currently authenticated user.
+    If the user is not authenticated, return None.
+
+    Returns:
+        Integer: \
+            If user is authenticated, return user id.
+        None: \
+            If user is not authenticated, return None.
+    """
+    from flask_login import current_user
+
+    user_id = None
+    if hasattr(current_user, 'id'):
+        user_id = current_user.id
+
+    return user_id

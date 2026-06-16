@@ -144,7 +144,7 @@
                     </div>
                   </div>
                 {%- endif -%}
-              {%- elif not access_permission or (is_billing_file and (not session['user_id'] or not billing_file_permission)) %}
+              {%- elif not access_permission or (is_billing_file and (not session['_user_id'] or not billing_file_permission)) %}
                 <div class="item {{ 'active' if loop.index == 1 else '' }}" id="carousel_prev_item_{{ loop.index }}">
                   <div class="embed-responsive embed-responsive-16by9 text-center">
                     <span class="fa fa-key" style="font-size:18px;font-weight:bold">

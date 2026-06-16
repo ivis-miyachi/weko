@@ -31,7 +31,7 @@ from kombu import Exchange, Queue
 import pytest
 from mock import Mock, patch
 from flask import Flask
-from flask_babelex import Babel, lazy_gettext as _
+from flask_babel import Babel, lazy_gettext as _
 from flask_celeryext import FlaskCeleryExt
 from flask_menu import Menu
 from werkzeug.local import LocalProxy
@@ -158,7 +158,10 @@ def base_app(instance_path):
         # SQLALCHEMY_DATABASE_URI=os.environ.get(
         #     'SQLALCHEMY_DATABASE_URI', 'sqlite:///test.db'),
         SEARCH_ELASTIC_HOSTS=os.environ.get(
-            'SEARCH_ELASTIC_HOSTS', 'elasticsearch'),
+                    'SEARCH_ELASTIC_HOSTS', 'opensearch'),
+        SEARCH_HOSTS=os.environ.get(
+            'SEARCH_HOST', 'opensearch'
+        ),
         SQLALCHEMY_TRACK_MODIFICATIONS=True,
         JSONSCHEMAS_HOST='inveniosoftware.org',
         ACCOUNTS_USERINFO_HEADERS=True,
@@ -176,7 +179,8 @@ def base_app(instance_path):
         SEARCH_UI_SEARCH_INDEX="test-weko",
         # SEARCH_ELASTIC_HOSTS=os.environ.get("INVENIO_ELASTICSEARCH_HOST"),
         SEARCH_INDEX_PREFIX="{}-".format('test'),
-        SEARCH_CLIENT_CONFIG=dict(timeout=120, max_retries=10),
+        # SEARCH_CLIENT_CONFIG={"http_auth":(os.environ['INVENIO_OPENSEARCH_USER'],os.environ['INVENIO_OPENSEARCH_PASS']),"use_ssl":True, "verify_certs":False},
+        SEARCH_CLIENT_CONFIG={"http_auth":(os.environ.get('INVENIO_OPENSEARCH_USER', 'invenio'),os.environ.get('INVENIO_OPENSEARCH_PASS', 'openpass123!')),"use_ssl":True, "verify_certs":False},
         OAISERVER_ID_PREFIX="oai:inveniosoftware.org:recid/",
         OAISERVER_RECORD_INDEX="_all",
         OAISERVER_REGISTER_SET_SIGNALS=True,

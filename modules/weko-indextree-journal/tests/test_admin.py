@@ -19,8 +19,8 @@ class TestIndexJournalSettingView:
         (4, False),
     ]
     @pytest.mark.parametrize('id, is_permission', user_results)
-    def test_index_acl(self, app, db, client_rest, users, test_indices, test_journals,mocker, id, is_permission):
-        mocker.patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
+    def test_index_acl(self, app, db, client_rest, users, test_indices, test_journals, id, is_permission):
+        patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
         login_user_via_session(client=client_rest, email=users[id]["email"])
         url = url_for("indexjournal.index", index_id=1)
         res = client_rest.get(url)
@@ -30,14 +30,14 @@ class TestIndexJournalSettingView:
             assert res.status_code != 200
 
     # .tox/c1/bin/pytest --cov=weko_indextree_journal tests/test_admin.py::TestIndexJournalSettingView::test_index -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-indextree-journal/.tox/c1/tmp
-    def test_index(self, app, db,client_rest, users,test_indices, test_journals,mocker):
+    def test_index(self, app, db,client_rest, users,test_indices, test_journals):
         login_user_via_session(client=client_rest, email=users[0]["email"])
         from weko_indextree_journal.models import Journal
         template = 'weko_indextree_journal/admin/index.html'
 
         url = url_for("indexjournal.index")
         # not lists
-        mock_render = mocker.patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
+        mock_render = patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
         res = client_rest.get(url)
         assert res.status_code == 200
         args, _ = mock_render.call_args
@@ -53,7 +53,7 @@ class TestIndexJournalSettingView:
         db.session.commit()
 
         # index_id <= 0
-        mock_render = mocker.patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
+        mock_render = patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
         res = client_rest.get(url)
         assert res.status_code == 200
         args, kwargs = mock_render.call_args
@@ -74,7 +74,7 @@ class TestIndexJournalSettingView:
 
         # journal is not None
         url = url_for("indexjournal.index",index_id="1")
-        mock_render = mocker.patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
+        mock_render = patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
         res = client_rest.get(url)
         assert res.status_code == 200
         args, kwargs = mock_render.call_args
@@ -86,7 +86,7 @@ class TestIndexJournalSettingView:
         # journal is None(raise error in get_journal_by_index_id)
         with patch("weko_indextree_journal.admin.Journals.get_journal_by_index_id",return_value=None):
             url = url_for("indexjournal.index",index_id="1000")
-            mock_render = mocker.patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
+            mock_render = patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
             res = client_rest.get(url)
             args, kwargs = mock_render.call_args
             assert res.status_code == 200
@@ -102,7 +102,7 @@ class TestIndexJournalSettingView:
             WEKO_INDEXTREE_JOURNAL_SCHEMA_JSON_API = "/xxx/xxx/xxx",
             WEKO_INDEXTREE_JOURNAL_FORM_JSON_API = "/yyy/yyy/yyy"
         )
-        mock_render = mocker.patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
+        mock_render = patch("weko_indextree_journal.admin.IndexJournalSettingView.render",return_value=make_response())
         res = client_rest.get(url)
         args, kwargs = mock_render.call_args
         assert kwargs['record'] == []

@@ -34,7 +34,7 @@ class _StataModelBase(Timestamp):
     id = db.Column(db.String(100), primary_key=True)
     source_id = db.Column(db.String(100))
     index = db.Column(db.String(100), nullable=False)
-    type = db.Column(db.String(50), nullable=False)
+    type = db.Column(db.String(50))
     source = db.Column(
         db.JSON()
         .with_variant(postgresql.JSONB(none_as_null=True), "postgresql",)
@@ -78,6 +78,50 @@ class _StataModelBase(Timestamp):
         query = db.session.query(cls)
         query = cls.get_by_date(query, start_date, end_date)
         query = query.filter(cls.index.ilike(_index + "%"))
+        return query.all()
+    
+    @classmethod
+    def get_by_event_type(
+        cls, _index, event_type, start_date = None, end_date = None
+    ):
+        """
+        Get stats data by event type, supporting both old and new versions of data.
+
+        Args:
+            _index (str): Event index for filtering.
+            event_type (str): The target event type (e.g., 'file-download').
+            start_date (str): Start date for filtering.
+            end_date (str): End date for filtering.
+
+        Returns:
+            list: List of filtered data.
+        """
+        from sqlalchemy import func, or_, and_
+        
+        # _index = 'tenant1-stats-index'/'tenant1-stats-events-index'
+        # beforeindex = 'tenant1-stats-[event-type]'/'tenant1-events-stats-[event-type]'
+        beforeindex =_index.replace("index","") + event_type
+        
+        query = db.session.query(cls)
+        query = cls.get_by_date(query, start_date, end_date)
+        
+        # index ILIKE 'tenant1-events-stats-[event-type]'
+        condition_1 = cls.index.ilike(beforeindex + "%")
+        
+        # source->>'event_type' = '[event-type]'
+        condition_2_1 = cls.index.ilike(_index + "%") 
+        condition_2_2 = func.jsonb_extract_path_text(cls.source, "event_type") == event_type
+        
+        query = query.filter(
+            or_(
+                condition_1,
+                and_(
+                    condition_2_1,
+                    condition_2_2
+                )
+            )
+        )
+        
         return query.all()
 
     @classmethod
@@ -147,7 +191,7 @@ class _StataModelBase(Timestamp):
                     'source_id': data_object.get("_id"),
                     'index': data_object.get("_index"),
                     'type': data_object.get("_type"),
-                    'source': json.dumps(data_object.get("_source")),
+                    'source': data_object.get("_source"),
                     'date': date
                 }
             else:
@@ -155,7 +199,7 @@ class _StataModelBase(Timestamp):
             uq_stats_key = cls.get_uq_key()
             stmt = insert(cls)
             db.session.execute(
-                clause=stmt.on_conflict_do_update(
+                stmt.on_conflict_do_update(
                     set_={'source': stmt.excluded.source},
                     constraint=uq_stats_key),
                 params=stats_data)

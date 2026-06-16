@@ -26,7 +26,7 @@ from functools import wraps
 from weko_items_ui.linkage import Researchmap
 
 from flask import current_app
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from lxml import etree
 from jsonschema import validate, ValidationError
 

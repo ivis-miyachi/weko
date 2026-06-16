@@ -1,7 +1,7 @@
 import json
 import pytest
 from flask import url_for, make_response, current_app
-from flask_babelex import lazy_gettext as _
+from flask_babel import lazy_gettext as _
 from flask_breadcrumbs import current_breadcrumbs
 from flask_menu import current_menu
 from mock import patch, MagicMock
@@ -67,7 +67,7 @@ def test_set_lifetime(client,db,users):
 
 #def lifetime():
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_lifetime -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_lifetime(client,users,db,mocker):
+def test_lifetime(client,users,db):
     url = url_for("weko_admin.lifetime")
     # not login
     res = client.get(url)
@@ -88,8 +88,8 @@ def test_lifetime(client,users,db,mocker):
     db.session.add(SessionLifetime(lifetime=100))
     db.session.commit()
     # method is POST, submit is lifetime
-    mock_render = mocker.patch("weko_admin.views.render_template",return_value=make_response())
-    mock_flash = mocker.patch("weko_admin.views.flash")
+    mock_render = patch("weko_admin.views.render_template",return_value=make_response())
+    mock_flash = patch("weko_admin.views.flash")
     res = client.post(url,data={"submit":"lifetime","lifetimeRadios":"45"})
     assert res.status_code == 200
     mock_render.assert_called_with(
@@ -104,7 +104,7 @@ def test_lifetime(client,users,db,mocker):
     SessionLifetime.query.delete()
     db.session.add(SessionLifetime(lifetime=100))
     db.session.commit()
-    mock_render = mocker.patch("weko_admin.views.render_template",return_value=make_response())
+    mock_render = patch("weko_admin.views.render_template",return_value=make_response())
     res = client.post(url,data={"submit":"not lifetime","lifetimeRadios":"45"})
     assert res.status_code == 200
     mock_render.assert_called_with(
@@ -118,7 +118,7 @@ def test_lifetime(client,users,db,mocker):
     # method is not POST, session_lifetime is None
     SessionLifetime.query.delete()
     db.session.commit()
-    mock_render = mocker.patch("weko_admin.views.render_template", return_value=make_response())
+    mock_render = patch("weko_admin.views.render_template", return_value=make_response())
     res = client.get(url)
     assert res.status_code == 200
     args, kwargs = mock_render.call_args
@@ -327,9 +327,9 @@ def test_save_api_cert_data(api, users):
 
 #def get_init_selection(selection=""):
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_init_selection -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_init_selection(api,mocker):
-    mocker.patch("weko_admin.views.get_initial_stats_report",return_value={"target":[{"id":"1","data":"test_data"}]})
-    mocker.patch("weko_admin.views.get_unit_stats_report",return_value={"unit":["test_value"]})
+def test_get_init_selection(api):
+    patch("weko_admin.views.get_initial_stats_report",return_value={"target":[{"id":"1","data":"test_data"}]})
+    patch("weko_admin.views.get_unit_stats_report",return_value={"unit":["test_value"]})
 
     # selection = target
     url = url_for("weko_admin.get_init_selection",selection="target")
@@ -471,8 +471,8 @@ def test_get_feedback_mail(api, users):
 
 #def get_send_mail_history():
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_send_mail_history -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_send_mail_history(api, mocker):
-    mocker.patch("weko_admin.views.FeedbackMail.load_feedback_mail_history",side_effect=lambda x, y:{"page":x})
+def test_get_send_mail_history(api):
+    patch("weko_admin.views.FeedbackMail.load_feedback_mail_history",side_effect=lambda x:{"page":x})
     url = url_for("weko_admin.get_send_mail_history")
     input = {"page":2, "repo_id":"Root Index"}
     res = api.get(url,query_string=input)
@@ -492,23 +492,23 @@ def test_get_send_mail_history(api, mocker):
                          (3,False),# contributor
                          (4,False),# generaluser
                          ])
-def test_get_failed_mail_acl(api, users, index, is_permission, mocker):
-    mocker.patch("weko_admin.views.FeedbackMail.load_feedback_failed_mail",side_effect=lambda x,y:{"history_id":x,"page":y})
+def test_get_failed_mail_acl(api, users, index, is_permission):
+    patch("weko_admin.views.FeedbackMail.load_feedback_failed_mail",side_effect=lambda x,y:{"history_id":x,"page":y})
     login_user_via_session(client=api, email=users[index]["email"])
     url = url_for("weko_admin.get_failed_mail")
     res = api.post(url,data={"page":5,"id":3})
     assert_role(res, is_permission)
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_failed_mail_acl_guest -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_failed_mail_acl_guest(api, mocker):
-    mocker.patch("weko_admin.views.FeedbackMail.load_feedback_failed_mail",side_effect=lambda x,y:{"history_id":x,"page":y})
+def test_get_failed_mail_acl_guest(api):
+    patch("weko_admin.views.FeedbackMail.load_feedback_failed_mail",side_effect=lambda x,y:{"history_id":x,"page":y})
     url = url_for("weko_admin.get_failed_mail")
     res = api.post(url,data={"page":5,"id":3})
     assert res.status_code == 401
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_failed_mail -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_failed_mail(api, users,mocker):
-    mocker.patch("weko_admin.views.FeedbackMail.load_feedback_failed_mail",side_effect=lambda x,y:{"history_id":x,"page":y})
+def test_get_failed_mail(api, users):
+    patch("weko_admin.views.FeedbackMail.load_feedback_failed_mail",side_effect=lambda x,y:{"history_id":x,"page":y})
     login_user_via_session(client=api, email=users[0]["email"])
     url = url_for("weko_admin.get_failed_mail")
     res = api.post(url,json={"page":5,"id":3})
@@ -554,10 +554,10 @@ def test_resend_failed_mail_guest(api):
             assert res.status_code == 302
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_resend_failed_mail -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_resend_failed_mail(api,users,mocker):
+def test_resend_failed_mail(api,users):
     url = url_for("weko_admin.resend_failed_mail")
     login_user_via_session(client=api, email=users[0]["email"])
-    mocker.patch("weko_admin.views.FeedbackMail",side_effect=Mock_FeedbackMail)
+    patch("weko_admin.views.FeedbackMail",side_effect=Mock_FeedbackMail)
     with patch("weko_admin.views.StatisticMail.send_mail_to_one"):
         res = api.post(url, json={"history_id":1})
         assert response_data(res) == {"success":True, "error":""}
@@ -592,7 +592,7 @@ def test_manual_send_site_license_mail_guest(api, site_license):
             assert res.status_code == 302
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_manual_send_site_license_mail -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_manual_send_site_license_mail(api, db, users, mocker):
+def test_manual_send_site_license_mail(api, db, users):
     url = url_for("weko_admin.manual_send_site_license_mail",start_month="202201",end_month="202203")
     login_user_via_session(client=api, email=users[0]["email"])
     #res = api.post(url)
@@ -617,13 +617,13 @@ def test_manual_send_site_license_mail(api, db, users, mocker):
     db.session.commit()
 
     report_helper_result = {"institution_name":[{"name":"other_name"},{"name":"test data1"}]}
-    mocker.patch("weko_admin.views.QueryCommonReportsHelper.get",return_value=report_helper_result)
-    mock_send = mocker.patch("weko_admin.views.send_site_license_mail")
-    res = api.post(url, data={"repo_id": "Root Index"})
+    patch("weko_admin.views.QueryCommonReportsHelper.get",return_value=report_helper_result)
+    mock_send = patch("weko_admin.views.send_site_license_mail")
+    res = api.post(url)
     assert res.data == b"finished"
     mock_send.assert_has_calls(
-        [mocker.call("test data1",["test@mail.com"],"202201-202203",{"name":"test data1"}),
-        mocker.call("test data2",["test@mail.com"],"202201-202203",{"file_download":0,"file_preview":0,"record_view":0,"search":0,"top_view":0}),
+        [call("test data1",["test@mail.com"],"202201-202203",{"name":"test data1"}),
+        call("test data2",["test@mail.com"],"202201-202203",{"file_download":0,"file_preview":0,"record_view":0,"search":0,"top_view":0}),
         ]
     )
 
@@ -706,13 +706,13 @@ def test_update_site_info_guest(api):
             assert res.status_code == 302
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_update_site_info -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_update_site_info(api, users, mocker):
+def test_update_site_info(api, users):
     url = url_for("weko_admin.update_site_info")
     login_user_via_session(client=api, email=users[0]["email"])
 
-    mocker.patch("weko_admin.views.format_site_info_data",return_value={"format":"test_format_data"})
-    mocker.patch("weko_admin.views.SiteInfo.update",return_value="update success")
-    mocker.patch("weko_admin.views.overwrite_the_memory_config_with_db")
+    patch("weko_admin.views.format_site_info_data",return_value={"format":"test_format_data"})
+    patch("weko_admin.views.SiteInfo.update",return_value="update success")
+    patch("weko_admin.views.overwrite_the_memory_config_with_db")
     with patch("weko_admin.views.validation_site_info",return_value={"error":"test_error"}):
         res = api.post(url, json={})
         assert response_data(res) == {"error":"test_error"}
@@ -724,7 +724,7 @@ def test_update_site_info(api, users, mocker):
 
 #def get_site_info():
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_site_info -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_site_info(api,db,users,site_info,mocker):
+def test_get_site_info(api,db,users,site_info):
     url = url_for("weko_admin.get_site_info")
     login_user_via_session(client=api, email=users[0]["email"])
     with patch("weko_admin.views.SiteInfo.get",return_value=None):
@@ -790,7 +790,7 @@ def test_get_site_info(api,db,users,site_info,mocker):
 
 #def get_avatar():
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_avatar -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_avatar(api,site_info,mocker):
+def test_get_avatar(api,site_info):
     url = url_for("weko_admin.get_avatar")
     with patch("weko_admin.views.SiteInfo.get",return_value=None):
         res = api.get(url)
@@ -802,10 +802,10 @@ def test_get_avatar(api,site_info,mocker):
 
 #def get_ogp_image():
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_ogp_image -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_ogp_image(api, db, site_info, file_instance, mocker):
+def test_get_ogp_image(api, db, site_info, file_instance):
     url = url_for("weko_admin.get_ogp_image")
 
-    mock_send = mocker.patch("invenio_files_rest.models.FileInstance.send_file",return_value=make_response())
+    mock_send = patch("invenio_files_rest.models.FileInstance.send_file",return_value=make_response())
     res = api.get(url)
     mock_send.assert_called_with(
         "test ogp image name1",
@@ -901,7 +901,7 @@ def test_get_usage_report_activities_guest(api):
         assert res.status_code == 302
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_get_usage_report_activities -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_get_usage_report_activities(api,users,mocker):
+def test_get_usage_report_activities(api,users):
     url = url_for("weko_admin.get_usage_report_activities")
     login_user_via_session(client=api, email=users[0]["email"])
     res = api.get(url,query_string={"page":3,"size":10})
@@ -933,12 +933,12 @@ def test_send_mail_reminder_usage_report_guest(api):
     assert res.status_code == 302
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_send_mail_reminder_usage_report -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_send_mail_reminder_usage_report(api,users,mocker):
+def test_send_mail_reminder_usage_report(api,users):
     login_user_via_session(client=api, email=users[0]["email"])
     class MockUsage:
         def send_reminder_mail(self,activities_id,mail_id=None,activities=None,forced_send=False):
             return True
-    mocker.patch("weko_admin.views.UsageReport",return_value=MockUsage())
+    patch("weko_admin.views.UsageReport",return_value=MockUsage())
 
     url = url_for("weko_admin.send_mail_reminder_usage_report")
     res = api.post(url,json={})
@@ -975,8 +975,8 @@ def test_save_facet_search_guest(api):
             assert res.status_code == 302
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_save_facet_search -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_save_facet_search(api, users, mocker):
-    mocker.patch("weko_admin.views.store_facet_search_query_in_redis")
+def test_save_facet_search(api, users):
+    patch("weko_admin.views.store_facet_search_query_in_redis")
     url = url_for("weko_admin.save_facet_search")
     login_user_via_session(client=api, email=users[0]["email"])
     with patch("weko_admin.views.is_exits_facet",return_value=True):
@@ -1025,10 +1025,10 @@ def test_remove_facet_search_guest(api):
         assert res.status_code == 302
 
 # .tox/c1/bin/pytest --cov=weko_admin tests/test_views.py::test_remove_facet_search -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-admin/.tox/c1/tmp
-def test_remove_facet_search(api, users, mocker):
+def test_remove_facet_search(api, users):
     url = url_for("weko_admin.remove_facet_search")
     login_user_via_session(client=api, email=users[0]["email"])
-    mocker.patch("weko_admin.views.store_facet_search_query_in_redis")
+    patch("weko_admin.views.store_facet_search_query_in_redis")
     res = api.post(url,json={"id":""})
     assert response_data(res) == {"status":False,"msg":"Failed to delete due to server error."}
 

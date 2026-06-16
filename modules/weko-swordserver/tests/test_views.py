@@ -1067,8 +1067,8 @@ def test_delete_item(app, client, db, tokens, sword_client, users,es_records, mo
 
 # def _create_error_document(type, error):
 # .tox/c1/bin/pytest --cov=weko_swordserver tests/test_views.py::test__create_error_document -vv -s --cov-branch --cov-report=term --basetemp=/code/modules/weko-swordserver/.tox/c1/tmp
-def test__create_error_document(mocker):
-    mock_datetime = mocker.patch("weko_swordserver.views.datetime")
+def test__create_error_document():
+    mock_datetime = patch("weko_swordserver.views.datetime")
     mock_datetime.now.return_value=datetime.datetime(2022,10,1,2,3,4)
     test = {
         "@context":"https://swordapp.github.io/swordv3/swordv3.jsonld",

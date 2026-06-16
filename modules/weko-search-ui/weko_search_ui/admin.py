@@ -30,11 +30,11 @@ from urllib.parse import urlencode
 import pickle
 import sys
 
+from flask import Response, abort, current_app, jsonify, make_response, request
 from blinker import Namespace
 from celery import chord
-from flask import Response, abort, current_app, jsonify, make_response, request
 from flask_admin import BaseView, expose
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from weko_admin.api import validate_csrf_header
@@ -58,6 +58,7 @@ from weko_records_ui.external import call_external_system
 from weko_deposit.api import WekoRecord
 
 from weko_search_ui.api import get_search_detail_keyword
+from weko_search_ui.tasks import import_item
 
 from .config import (
     WEKO_EXPORT_TEMPLATE_BASIC_ID,
@@ -781,17 +782,20 @@ class ItemImportView(BaseView):
 
     @expose("/check_import_is_available", methods=["GET"])
     def check_import_available(self):
-        check = is_import_running()
-        if check:
-            return jsonify(
-                {
-                    "is_available": False,
-                    "error_id": check,
-                }
-            )
-
-        else:
-            return jsonify({"is_available": True})
+        try:
+            check = is_import_running()
+            if check:
+                return jsonify(
+                    {
+                        "is_available": False,
+                        "error_id": check,
+                    }
+                )
+            else:
+                return jsonify({"is_available": True})
+        except Exception as e:
+            current_app.logger.error(f"Error checking import status: {e}")
+            return jsonify({"error": str(e)}), 500
 
 
 class ItemRocrateImportView(BaseView):

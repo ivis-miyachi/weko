@@ -28,10 +28,9 @@ import re
 import sys
 import traceback
 
-from elasticsearch.exceptions import NotFoundError
-from elasticsearch_dsl.query import QueryString
+from invenio_search.engine import search,dsl
 from flask import current_app, request
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from invenio_db import db
 from invenio_pidstore.models import PersistentIdentifier, PIDStatus
 from invenio_records.api import Record
@@ -504,9 +503,9 @@ class ItemTypes(RecordBase):
             return result
 
         def __update_es_data(_es_data, _delete_list):
-            """Update metadata on ElasticSearch.
+            """Update metadata on search engine.
 
-            :param _es_data: Elasticsearch data.
+            :param _es_data: search engine data.
             :param _delete_list: delete list
             """
             item_type_mapping = Mapping.get_record(item_type_id=item_type_id)
@@ -581,7 +580,7 @@ class ItemTypes(RecordBase):
         if len(delete_list) == 0:
             return
 
-        # Get records on ElasticSearch based on Item Type Name
+        # Get records on search engine based on Item Type Name
         records = cls.__get_records_by_item_type_name(item_type_name)
         record_ids = []
         es_data = []
@@ -603,12 +602,12 @@ class ItemTypes(RecordBase):
         __update_record_metadata(record_ids, delete_list)
         # Update item metadata in DB based on data from ES.
         __update_item_metadata(record_ids, delete_list)
-        # Update Elasticsearch data
+        # Update search engine data
         __update_es_data(es_data, delete_list)
 
     @classmethod
     def __get_records_by_item_type_name(cls, item_type_name):
-        """Get records on Elasticsearch by Item Type Name.
+        """Get records on search engine by Item Type Name.
 
         :param item_type_name: Item Type Name.
         :return: Record list.
@@ -621,7 +620,7 @@ class ItemTypes(RecordBase):
             search = search.query('term', **{"itemtype.keyword": item_type_name})
             search = search.sort('-publish_date', '-_updated')
             result = execute_search_with_pagination(search, -1)
-        except NotFoundError as e:
+        except search.NotFoundError as e:
             current_app.logger.debug("Indexes do not exist yet: ", str(e))
         return result
 
@@ -736,7 +735,7 @@ class ItemTypes(RecordBase):
         with db.session.no_autoflush:
             query = ItemTypeName.query
             if not with_deleted:
-                query = query.join(ItemType).filter(
+                query = query.join(ItemType, ItemType.name_id == ItemTypeName.id).filter(
                     ItemType.is_deleted.is_(False))
             return query.order_by(ItemTypeName.id).all()
 
@@ -748,7 +747,7 @@ class ItemTypes(RecordBase):
         :returns: A list of :class:`ItemTypeName` joined w/ :class:`ItemType`.
         """
         with db.session.no_autoflush:
-            query = ItemTypeName.query.join(ItemType) \
+            query = ItemTypeName.query.join(ItemType, ItemType.name_id == ItemTypeName.id) \
                 .add_columns(ItemTypeName.name, ItemType.id,
                              ItemType.harvesting_type, ItemType.is_deleted,
                              ItemType.tag)
@@ -769,7 +768,7 @@ class ItemTypes(RecordBase):
         with db.session.no_autoflush:
             query = ItemTypeName.query
             if not with_deleted:
-                query = query.join(ItemType).filter(
+                query = query.join(ItemType, ItemType.id == ItemTypeName.id).filter(
                     ItemType.is_deleted.is_(False),
                     ItemType.harvesting_type.is_(harvesting_type)
                 )
@@ -968,7 +967,7 @@ class ItemTypes(RecordBase):
         result = {"msg":"Update ItemType({})".format(itemtype_id),"code":0}
         item_type = ItemTypes.get_by_id(itemtype_id)
         data = pickle.loads(pickle.dumps(item_type.render, -1))
-        
+
         pat1 = re.compile(r'cus_(\d+)')
         for idx, i in enumerate(data['table_row_map']['form']):
             if isinstance(i,dict) and 'key' in i:
@@ -984,7 +983,7 @@ class ItemTypes(RecordBase):
                             if str(_property_id) in prop_mapping:
                                 result['msg'] = result['msg'] + "\nUpdate Property({}) Mapping({})".format(_property_id,_mapping)
                                 data['table_row_map']['mapping'][_prop_id][_mapping]=prop_mapping.get(str(_property_id)).get(_mapping, "")
-        
+
         mapping = Mapping.get_record(itemtype_id)
         table_row_map = data.get('table_row_map')
         mapping.model.mapping = table_row_map.get('mapping')
@@ -992,7 +991,7 @@ class ItemTypes(RecordBase):
         db.session.add(mapping.model)
 
         return result
-        
+
 
 
     @classmethod
@@ -1048,7 +1047,7 @@ class ItemTypes(RecordBase):
                                 if 'format' in data['table_row_map']['schema']['properties'][_prop_id]:
                                     data['table_row_map']['schema']['properties'][_prop_id].pop('format')
 
-                                tmp_data = pickle.loads(pickle.dumps(data['table_row_map']['form'][idx], -1))                            
+                                tmp_data = pickle.loads(pickle.dumps(data['table_row_map']['form'][idx], -1))
                                 _forms = json.loads(json.dumps(pickle.loads(pickle.dumps(_prop.forms, -1))).replace('parentkey',_prop_id))
                                 data['table_row_map']['form'][idx]=pickle.loads(pickle.dumps(_forms, -1))
                                 cls.update_attribute_options(tmp_data, data['table_row_map']['form'][idx], renew_value)
@@ -1059,9 +1058,9 @@ class ItemTypes(RecordBase):
                                 data['table_row_map']['schema']['properties'][_prop_id]=pickle.loads(pickle.dumps(_prop.schema, -1))
                                 data['table_row_map']['schema']['properties'][_prop_id]['type']="object"
                                 if 'maxItems' in data['table_row_map']['schema']['properties'][_prop_id]:
-                                    data['table_row_map']['schema']['properties'][_prop_id] = data['table_row_map']['schema']['properties'][_prop_id].pop("maxItems") 
+                                    data['table_row_map']['schema']['properties'][_prop_id] = data['table_row_map']['schema']['properties'][_prop_id].pop("maxItems")
                                 if 'minItems' in data['table_row_map']['schema']['properties'][_prop_id]:
-                                    data['table_row_map']['schema']['properties'][_prop_id] = data['table_row_map']['schema']['properties'][_prop_id].pop("minItems") 
+                                    data['table_row_map']['schema']['properties'][_prop_id] = data['table_row_map']['schema']['properties'][_prop_id].pop("minItems")
                                 # cls.update_property_enum(item_type.render['table_row_map']['schema']['properties'],data['table_row_map']['schema']['properties'][_prop_id], renew_value)
                                 _form = json.loads(json.dumps(pickle.loads(pickle.dumps(_prop.form, -1))).replace('parentkey',_prop_id))
                                 data['table_row_map']['form'][idx]=pickle.loads(pickle.dumps(_form, -1))
@@ -1114,8 +1113,8 @@ class ItemTypes(RecordBase):
             flag_modified(mapping.model, 'mapping')
             db.session.add(mapping.model)
             result['msg'] = "Fix ItemType({}) mapping".format(itemtype_id)
-            result['code'] = 0  
-        
+            result['code'] = 0
+
         ItemTypeEditHistory.create_or_update(
             item_type_id=record.model.id,
             user_id=1,
@@ -1127,7 +1126,7 @@ class ItemTypes(RecordBase):
     @classmethod
     def update_mapping_without_static(cls, old_mapping, mapping_prop):
         """Update the mapping dictionary by copying static values from the old mapping.
-        
+
         This method searches for static values (strings starting with '=') in the old_mapping,
         and sets the same static values at the corresponding paths in mapping_prop.
         Only existing paths in mapping_prop will be updated; missing paths are ignored.
@@ -1135,10 +1134,10 @@ class ItemTypes(RecordBase):
         Args:
             old_mapping (dict): The original mapping dictionary containing static values.
             mapping_prop (dict): The target mapping dictionary to update.
-        
+
         Returns:
             dict: The updated mapping_prop with static values set.
-        
+
         Example:
             >>> old = {'a': {'b': '=static'}}
             >>> new = {'a': {'b': 'test'}}
@@ -1148,11 +1147,11 @@ class ItemTypes(RecordBase):
 
         def find_static_value(d, path=""):
             """Recursively search for static values in a nested dictionary structure.
-            
+
             A static value is defined as a string that starts with '='.
-            Returns a list of tuples, where each tuple contains the path 
+            Returns a list of tuples, where each tuple contains the path
             (dot-separated) to the static value and the value itself.
-            
+
             Args:
                 d (dict or str): The dictionary or string to search.
                 path (str, optional): The current path in dot notation. Defaults to "".
@@ -1165,7 +1164,7 @@ class ItemTypes(RecordBase):
                 >>> find_static_value(data)
                 [('a.b', '=static')]
             """
-            result = [] 
+            result = []
             if isinstance(d,dict):
                 for key, value in d.items():
                     result+=find_static_value(value,f"{path}.{key}" if path!="" else key)
@@ -1187,7 +1186,7 @@ class ItemTypes(RecordBase):
             if is_exist_field:
                 temp[keys[-1]] = value
         return mapping_prop
-    
+
     @classmethod
     def update_property_enum(cls, old_value, new_value, renew_value = 'None'):
         managed_key_list = current_app.config.get("WEKO_RECORDS_MANAGED_KEYS")

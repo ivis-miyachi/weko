@@ -26,8 +26,8 @@ import traceback
 
 from email_validator import validate_email
 from flask import Blueprint, current_app, jsonify, make_response, request, Response, abort, url_for
-from flask_babelex import get_locale
-from flask_babelex import gettext as _
+from flask_babel import get_locale
+from flask_babel import gettext as _
 from flask_login import current_user
 from werkzeug.http import generate_etag
 from redis import RedisError

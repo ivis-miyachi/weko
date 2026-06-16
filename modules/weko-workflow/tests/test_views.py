@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm import joinedload
 
 from flask import json, jsonify, url_for, make_response, current_app
-from flask_babelex import gettext as _
+from flask_babel import gettext as _
 from invenio_db import db
 from sqlalchemy.exc import SQLAlchemyError, StatementError
 from datetime import datetime

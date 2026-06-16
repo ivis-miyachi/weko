@@ -27,10 +27,11 @@ import traceback
 
 import redis
 import re
+import json
 from redis import RedisError
 import requests
 from flask import current_app, render_template
-from flask_babelex import lazy_gettext as _
+from flask_babel import lazy_gettext as _
 from invenio_db import db
 from invenio_mail.api import send_mail
 from weko_redis.redis import RedisConnection
@@ -198,7 +199,8 @@ class TempDirInfo(object):
             int: Action status.
 
         """
-        return cls.redis.hset(cls.key, temp_path, extra_info)
+        extra_info_str = json.dumps(extra_info)
+        return cls.redis.hset(cls.key, temp_path, extra_info_str)
 
     def delete(cls, temp_path):
         """Delete data.
@@ -222,8 +224,16 @@ class TempDirInfo(object):
             dict: Extended information according temp_path.
 
         """
-        val = cls.redis.hget(cls.key, temp_path)
-        return ast.literal_eval(val.decode("UTF-8")) if val else None
+        try:
+            val = cls.redis.hget(cls.key, temp_path)
+            if val:
+                # Decode and parse as JSON
+                return json.loads(val.decode("UTF-8"))
+            return None
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            # Log or handle errors appropriately
+            current_app.logger.error(f"Error decoding or parsing value for {temp_path}: {e}")
+            return None
 
     def get_all(cls):
         """Get all data.
@@ -233,9 +243,17 @@ class TempDirInfo(object):
 
         """
         result = {}
-        for idx, val in cls.redis.hgetall(cls.key).items():
-            path = idx.decode("UTF-8")
-            result[path] = ast.literal_eval(val.decode("UTF-8") or '{}')
+        try:
+            for idx, val in cls.redis.hgetall(cls.key).items():
+                path = idx.decode("UTF-8")
+                try:
+                    result[path] = json.loads(val.decode("UTF-8")) if val else {}
+                except json.JSONDecodeError as e:
+                    current_app.logger.error(f"Error decoding JSON for {path}: {e}")
+                    result[path] = {}
+        except UnicodeDecodeError as e:
+            current_app.logger.error(f"Error decoding keys/values in Redis: {e}")
+
         return result
 
 
@@ -264,3 +282,4 @@ def validate_csrf_header(request,csrf_header="X-CSRFToken"):
 
         if not same_origin(request.referrer, good_referrer):
             raise CSRFError("The referrer does not match the host.")
+        
