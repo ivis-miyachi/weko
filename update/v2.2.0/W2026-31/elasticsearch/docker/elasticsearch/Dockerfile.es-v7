@@ -19,7 +19,7 @@
 # MA 02111-1307, USA.
 
 # Use Elasticsearch 6.
-FROM docker.elastic.co/elasticsearch/elasticsearch:7.4.1
+FROM docker.elastic.co/elasticsearch/elasticsearch:7.10.2
 WORKDIR /usr/share/elasticsearch
 ARG ELASTICSEARCH_S3_ACCESS_KEY
 ARG ELASTICSEARCH_S3_SECRET_KEY
@@ -31,7 +31,7 @@ ENV ELASTICSEARCH_S3_ENDPOINT=${ELASTICSEARCH_S3_ENDPOINT}
 ENV ELASTICSEARCH_S3_BUCKET=${ELASTICSEARCH_S3_BUCKET}
 RUN mkdir -p backups && \
     chown -R elasticsearch:elasticsearch ./backups
-COPY scripts/provision-elasticsearch.sh /tmp/
-COPY elasticsearch/dic/character/kui.txt /usr/share/elasticsearch/config
+COPY update/v2.2.0/W2026-31/elasticsearch/docker/provision-elasticsearch_es-v7.sh /tmp/provision-elasticsearch.sh
+COPY update/v2.2.0/W2026-31/elasticsearch/docker/elasticsearch/dic/character/kui.txt /usr/share/elasticsearch/config
 # Install Elasticsarch plugins:
 RUN /tmp/provision-elasticsearch.sh

@@ -21,12 +21,12 @@
 version: "3.2"
 
 services:
-  
+
   elasticsearch:
     restart: "always"
     build:
       context: .
-      dockerfile: ./elasticsearch/Dockerfile
+      dockerfile: ./update/v2.2.0/W2026-31/elasticsearch/docker/elasticsearch/Dockerfile
       args:
         - ELASTICSEARCH_S3_ACCESS_KEY=${ELASTICSEARCH_S3_ACCESS_KEY}
         - ELASTICSEARCH_S3_SECRET_KEY=${ELASTICSEARCH_S3_SECRET_KEY}
@@ -45,7 +45,7 @@ services:
     restart: "always"
     build:
       context: .
-      dockerfile: ./elasticsearch/Dockerfile.es-v7
+      dockerfile: ./update/v2.2.0/W2026-31/elasticsearch/docker/elasticsearch/Dockerfile.es-v7
       args:
         - ELASTICSEARCH_S3_ACCESS_KEY=${ELASTICSEARCH_S3_ACCESS_KEY}
         - ELASTICSEARCH_S3_SECRET_KEY=${ELASTICSEARCH_S3_SECRET_KEY}
