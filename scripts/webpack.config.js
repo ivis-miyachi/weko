@@ -18,6 +18,7 @@ const safePostCssParser = require("postcss-safe-parser");
 const TerserPlugin = require("terser-webpack-plugin");
 const webpack = require("webpack");
 const ESLintPlugin = require("eslint-webpack-plugin");
+const { ESBuildMinifyPlugin } = require("esbuild-loader");
 
 // Load aliases from config and resolve their full path
 let aliases = {};
@@ -61,49 +62,14 @@ var webpackConfig = {
   },
   optimization: {
     minimizer: [
-      new TerserPlugin({
-        terserOptions: {
-          parse: {
-            // we want terser to parse ecma 8 code. However, we don't want it
-            // to apply any minfication steps that turns valid ecma 5 code
-            // into invalid ecma 5 code. This is why the 'compress' and 'output'
-            // sections only apply transformations that are ecma 5 safe
-            // https://github.com/facebook/create-react-app/pull/4234
-            ecma: 8,
-          },
-          compress: {
-            ecma: 5,
-            warnings: false,
-            // Disabled because of an issue with Uglify breaking seemingly valid code:
-            // https://github.com/facebook/create-react-app/issues/2376
-            // Pending further investigation:
-            // https://github.com/mishoo/UglifyJS2/issues/2011
-            comparisons: false,
-            // Disabled because of an issue with Terser breaking valid code:
-            // https://github.com/facebook/create-react-app/issues/5250
-            // Pending further investigation:
-            // https://github.com/terser-js/terser/issues/120
-            inline: 2,
-          },
-          mangle: false,
-          output: {
-            ecma: 5,
-            comments: false,
-            // Turned on because emoji and regex is not minified properly using default
-            // https://github.com/facebook/create-react-app/issues/2488
-            ascii_only: true,
-          },
-        },
-        // Use multi-process parallel running to improve the build speed
-        // Default number of concurrent runs: os.cpus().length - 1
-        parallel: true,
-        cache: true,
-      }),
-      new OptimizeCSSAssetsPlugin({
-        cssProcessorOptions: {
-          parser: safePostCssParser,
-          map: false,
-        },
+      new ESBuildMinifyPlugin({
+        target: "es2015",                         // "es5" は既存 chunk 中の const でエラーになるため不可
+        supported: { "template-literal": false, "object-extensions": false }, // テンプレートリテラル化させない / IE11 等 ES5 環境向けにオブジェクト短縮記法を出力しない
+        minifyIdentifiers: false,                 // 旧設定 mangle:false を踏襲 (AngularJS 暗黙 DI 保護)
+        minifySyntax: true,
+        minifyWhitespace: true,
+        legalComments: "eof",                     // ライセンスコメントはファイル末尾に保持
+        css: true,                                // CSS も esbuild で圧縮 (cssnano を置換)
       }),
     ],
     splitChunks: {

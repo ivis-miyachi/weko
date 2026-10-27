@@ -138,6 +138,7 @@ pip install setuptools==71.0.3
 ${INVENIO_WEB_INSTANCE} webpack create
 cdvirtualenv "var/instance/assets"
 CI=true npm install --legacy-peer-deps
+CI=true npm install esbuild-loader@2.21.0 --legacy-peer-deps
 CI=true npm install angular-schema-form@0.8.13 --legacy-peer-deps
 ## for install ckeditor plugins
 cdvirtualenv "var/instance/assets/node_modules/ckeditor/plugins"
