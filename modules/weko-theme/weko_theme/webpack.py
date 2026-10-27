@@ -38,6 +38,11 @@ weko_theme = WebpackThemeBundle(
                 'react': '16.14.0',
                 'react-dom': '16.14.0'
             },
+            devDependencies={
+                # Pin Dart Sass: >=1.77.7 adds mixed-decls, >=1.79 legacy-js-api/color-functions,
+                # >=1.80 import/global-builtin, >=1.95 if-function deprecation warnings
+                "sass": "1.77.6",
+            },
             aliases={
                 "../../theme.config$": "less/weko_theme/theme.config",
             }

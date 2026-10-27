@@ -6,7 +6,8 @@
  * under the terms of the MIT License; see LICENSE file for more details.
  */
 
-@import "~prismjs/themes/prism";
+// @import "~prismjs/themes/prism";
+@import "~prismjs/themes/prism.css";
 
 code[class*="language-"], pre[class*="language-"] {
   line-height: 1.0;

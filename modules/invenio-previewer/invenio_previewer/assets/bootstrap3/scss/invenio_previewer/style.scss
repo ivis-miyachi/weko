@@ -6,8 +6,15 @@
  * under the terms of the MIT License; see LICENSE file for more details.
  */
 
-$icon-font-path: "~bootstrap-sass/assets/fonts/bootstrap/";
-$fa-font-path: "~font-awesome/fonts";
+// $icon-font-path: "~bootstrap-sass/assets/fonts/bootstrap/";
+// $fa-font-path: "~font-awesome/fonts";
 
-@import "~bootstrap-sass/assets/stylesheets/_bootstrap";
-@import "~font-awesome/scss/font-awesome";
+// @import "~bootstrap-sass/assets/stylesheets/_bootstrap";
+// @import "~font-awesome/scss/font-awesome";
+
+@use "~bootstrap-sass/assets/stylesheets/bootstrap" with (
+  $icon-font-path: "~bootstrap-sass/assets/fonts/bootstrap/"
+);
+@use "~font-awesome/scss/font-awesome" with (
+  $fa-font-path: "~font-awesome/fonts"
+);
