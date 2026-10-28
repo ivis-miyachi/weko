@@ -64,12 +64,18 @@ ENV INVENIO_DB_POOL_CLASS=QueuePool
 FROM stage_1 AS stage_2
 # Install Weko web node pre-requisites:
 COPY scripts/provision-web.sh /tmp/
-RUN /tmp/provision-web.sh
+RUN /tmp/provision-web.sh \
+ && rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache \
+ && for p in libreoffice fonts-noto-extra build-essential python3-pip mesa-vulkan-drivers; do \
+      if dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q 'install ok installed'; then \
+        echo "[ERROR] unexpected package: $p"; exit 1; fi; \
+    done
 
 FROM stage_2 AS stage_3
 # Add Weko sources to `code` and work there:
+RUN adduser --uid 1000 --disabled-password --gecos '' invenio \
+ && install -d -o invenio -g invenio /code
 WORKDIR /code
-RUN adduser --uid 1000 --disabled-password --gecos '' invenio
 USER invenio
 COPY --chown=invenio:invenio scripts /code/scripts
 COPY --chown=invenio:invenio tools /code/tools
@@ -84,26 +90,27 @@ COPY --chown=invenio:invenio tika /code/tika
 
 FROM stage_3 AS stage_4
 # Create Weko instance:
-RUN chmod +x /code/scripts/create-instance.sh && /code/scripts/create-instance.sh
+RUN chmod +x /code/scripts/create-instance.sh && /code/scripts/create-instance.sh \
+ && rm -rf /home/invenio/.cache/pip /home/invenio/.cache/virtualenv
 
 FROM stage_4 AS stage_5
 # Create Weko instance2:
 USER invenio
 WORKDIR /code
 COPY --chown=invenio:invenio scripts/instance.cfg /code/scripts/instance.cfg
-RUN chmod +x /code/scripts/create-instance2.sh && /code/scripts/create-instance2.sh
+RUN chmod +x /code/scripts/create-instance2.sh && /code/scripts/create-instance2.sh \
+ && rm -rf /home/invenio/.virtualenvs/invenio/var/instance/assets/node_modules/.cache \
+           /tmp/v8-compile-cache-* /home/invenio/.npm
 
 FROM stage_5 AS build-env
 # Make given VENV default:
 ENV PATH=/home/invenio/.virtualenvs/invenio/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV VIRTUALENVWRAPPER_PYTHON=/home/invenio/.virtualenvs/invenio/bin/python
-RUN pip install virtualenvwrapper
-RUN echo "source /home/invenio/.virtualenvs/invenio/bin/virtualenvwrapper.sh" >> ~/.bashrc ; echo "workon invenio" >> ~/.bashrc
+RUN pip install --no-cache-dir virtualenvwrapper \
+ && echo "source /home/invenio/.virtualenvs/invenio/bin/virtualenvwrapper.sh" >> ~/.bashrc \
+ && echo "workon invenio" >> ~/.bashrc
 #RUN mv /home/invenio/.virtualenvs/invenio/var/instance/static /home/invenio/.virtualenvs/invenio/var/instance/static.org
 #RUN mv /home/invenio/.virtualenvs/invenio/var/instance/assets /home/invenio/.virtualenvs/invenio/var/instance/assets.org
-USER root
-RUN chown -R invenio:invenio /code
-USER invenio
 
 # CMD ["/bin/bash", "-c", "gunicorn invenio_app.wsgi --workers=4 --worker-class=meinheld.gmeinheld.MeinheldWorker -b 0.0.0.0:5000 "]
 #CMD ["/bin/bash","-c","uwsgi --ini /code/scripts/uwsgi.ini"]

@@ -46,62 +46,6 @@ fi
 # unattended installation:
 export DEBIAN_FRONTEND=noninteractive
 
-provision_web_common_ubuntu14 () {
-
-    # Point the main repository to the archive
-    #sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list
-
-    # Point the security repository to the archive
-    # sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list
-
-
-    # sphinxdoc-install-useful-system-tools-ubuntu14-begin
-    # update list of available packages:
-    $sudo apt-get -y update --allow-releaseinfo-change
-    # install useful system tools:
-    $sudo apt-get -y install \
-         curl \
-         git \
-         rlwrap \
-         screen \
-         vim \
-         gnupg \
-         libpcre2-dev
-    # sphinxdoc-install-useful-system-tools-ubuntu14-end
-    # sphinxdoc-add-nodejs-external-repository-ubuntu14-begin
-    #cat /etc/apt/sources.list.d/nodesource.list -> no such file or directory
-    if [[ ! -f /etc/apt/sources.list.d/nodesource.list ]]; then
-        curl -sL https://deb.nodesource.com/setup_20.x | $sudo bash -
-    fi
-    # sphinxdoc-add-nodejs-external-repository-ubuntu14-end
-
-    # Added in order to accomidate Debians Version 9 -> 10 update
-    # See: https://github.com/nodesource/distributions/issues/866
-    $sudo printf "\nPackage: *\nPin: origin deb.nodesource.com\nPin-Priority: 600" >> /etc/apt/preferences.d/nodesource
-    # sphinxdoc-install-web-common-ubuntu14-begin
-    $sudo apt-get -y install \
-         libffi-dev \
-         libfreetype6-dev \
-         libjpeg-dev \
-         libmsgpack-dev \
-         libssl-dev \
-         libtiff-dev \
-         libxml2-dev \
-         libxslt-dev \
-         libzip-dev \
-         libjpeg-dev \
-         nodejs \
-         python-dev-is-python3 \
-         python3-pip
-    # sphinxdoc-install-web-common-ubuntu14-end
-}
-
-provision_web_libpostgresql_ubuntu14 () {
-    # sphinxdoc-install-web-libpostgresql-ubuntu14-begin
-    $sudo apt-get -y install \
-         libpq-dev
-    # sphinxdoc-install-web-libpostgresql-ubuntu14-end
-}
 
 provision_web_common_centos7 () {
 
@@ -243,19 +187,6 @@ setup_nginx_centos7 () {
     # sphinxdoc-install-web-nginx-centos7-end
 }
 
-setup_libreoffice_ubuntu14 () {
-    # sphinxdoc-install-web-libreoffice-ubuntu14-begin
-    set +o errexit
-    $sudo mkdir -p /usr/share/man/man1
-    $sudo apt-get install default-jre libreoffice-java-common
-    $sudo apt-get install -y libreoffice
-    #$sudo apt-get install -y libreoffice-core --no-install-recommends
-    $sudo apt-get install -y fonts-ipafont fonts-ipaexfont # japanese fonts
-    $sudo apt-get install -y supervisor
-    set -o errexit
-    # sphinxdoc-install-web-libreoffice-ubuntu14-end
-}
-
 setup_libreoffice_centos7 () {
     # sphinxdoc-install-web-libreoffice-centos7-begin
     set +o errexit
@@ -265,16 +196,65 @@ setup_libreoffice_centos7 () {
     # sphinxdoc-install-web-libreoffice-centos7-end
 }
 
-cleanup_web_ubuntu14 () {
-    # sphinxdoc-install-web-cleanup-ubuntu14-begin
-    $sudo apt-get -y autoremove && $sudo apt-get -y clean
-    # sphinxdoc-install-web-cleanup-ubuntu14-end
-}
 
 cleanup_web_centos7 () {
     # sphinxdoc-install-web-cleanup-centos7-begin
     $sudo yum clean -y all
     # sphinxdoc-install-web-cleanup-centos7-end
+}
+
+# Debian 系（docker / Ubuntu / Debian / WSL2）共通: 推奨パッケージを入れない最小構成
+# 引数: docker | host
+provision_web_debian_family () {
+    local target="$1"
+    local apt_install="$sudo apt-get -y install --no-install-recommends"
+
+    $sudo apt-get -y update --allow-releaseinfo-change
+    $apt_install \
+         ca-certificates curl git rlwrap screen vim gnupg \
+         libpcre2-dev
+
+    if [[ ! -f /etc/apt/sources.list.d/nodesource.list ]]; then
+        curl -sL https://deb.nodesource.com/setup_20.x | $sudo bash -
+    fi
+    # リダイレクトも sudo で行い、毎回同じ内容で上書きする
+    printf "Package: *\nPin: origin deb.nodesource.com\nPin-Priority: 600\n" \
+        | $sudo tee /etc/apt/preferences.d/nodesource >/dev/null
+    $apt_install \
+         gcc libc6-dev \
+         libssl-dev libxml2-dev \
+         libpq-dev \
+         nodejs
+    # pip と Python のヘッダが無いとき（ホストのシステムの Python）だけ入れる。
+    # setup_virtualenvwrapper はこの pip を使い、psycopg2 と uwsgi はこのヘッダでビルドされる。
+    # docker のベースイメージ（python:3.12）には /usr/local に両方あるので、分岐に関係なく入らない
+    if ! command -v pip >/dev/null 2>&1; then
+        $apt_install python3-pip
+    fi
+    if ! python3 -c 'import os, sysconfig; exit(not os.path.exists(os.path.join(sysconfig.get_paths()["include"], "Python.h")))' 2>/dev/null; then
+        $apt_install python-dev-is-python3
+    fi
+    $sudo mkdir -p /usr/share/man/man1
+    $apt_install \
+         default-jre-headless \
+         libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-math \
+         fonts-ipafont fonts-ipaexfont \
+         fonts-dejavu-core fonts-liberation2 \
+         fonts-crosextra-carlito fonts-crosextra-caladea \
+         fonts-noto-core \
+         supervisor
+    # 必須コマンドの存在確認（set +o errexit で失敗が隠れないように）
+    for c in libreoffice java gcc; do
+        command -v "$c" >/dev/null || { echo "[ERROR] $c not found"; exit 1; }
+    done
+}
+
+cleanup_web_debian_family () {
+    local target="$1"
+    $sudo apt-get -y autoremove && $sudo apt-get -y clean
+    if [ "$target" = "docker" ]; then
+        $sudo rm -rf /var/lib/apt/lists/*
+    fi
 }
 
 main () {
@@ -296,46 +276,42 @@ main () {
         os_distribution="UNDETECTED"
         os_release="UNDETECTED"
     fi
-
+    echo "[INFO] provision-web: os=${os_distribution} rel=${os_release} WEKO_DOCKER_BUILD=${WEKO_DOCKER_BUILD:-unset}"
     # call appropriate provisioning functions:
-    if [ -f /.dockerinit ] || [ -f /.dockerenv ]; then
+    if [ "${WEKO_DOCKER_BUILD:-0}" = "1" ] || [ -f /.dockerinit ] || [ -f /.dockerenv ]; then
+        echo "[INFO] provision-web: branch=docker"
         # running inside Docker
-        provision_web_common_ubuntu14
-        provision_web_libpostgresql_ubuntu14
+        provision_web_debian_family docker
         setup_npm_and_css_js_filters
         setup_virtualenvwrapper
-        setup_libreoffice_ubuntu14
-        cleanup_web_ubuntu14
-    elif [ "$os_distribution" = "Ubuntu" ]; then
-        provision_web_common_ubuntu14
-        provision_web_libpostgresql_ubuntu14
-        setup_npm_and_css_js_filters
-        setup_virtualenvwrapper
-        #setup_nginx_ubuntu14
-        setup_libreoffice_ubuntu14
-        cleanup_web_ubuntu14
-    elif [ "$os_distribution" = "DEBIAN" ]; then
-        # WSL2
-        provision_web_common_ubuntu14
-        provision_web_libpostgresql_ubuntu14
+        cleanup_web_debian_family docker
+elif [ "$os_distribution" = "Ubuntu" ] || [ "$os_distribution" = "Debian" ] || [ "$os_distribution" = "DEBIAN" ]; then
+        # Debian: lsb_release があると "Debian"、無いと "DEBIAN"（/etc/debian_version）になる。WSL2 も含む
+        echo "[INFO] provision-web: branch=debian_family os=${os_distribution}"
+        provision_web_debian_family host
         setup_npm_and_css_js_filters
         setup_virtualenvwrapper
         #setup_nginx_ubuntu14
-        setup_libreoffice_ubuntu14
-        cleanup_web_ubuntu14
+        cleanup_web_debian_family host
     elif [ "$os_distribution" = "CentOS" ]; then
-        if [ "$os_release" = "7" ]; then
-            provision_web_common_centos7
-            provision_web_libpostgresql_centos7
-            setup_npm_and_css_js_filters
-            setup_virtualenvwrapper
-            #setup_nginx_centos7
-            setup_libreoffice_centos7
-            cleanup_web_centos7
-        else
-            echo "[ERROR] Sorry, unsupported release ${os_release}."
-            exit 1
-        fi
+        # CentOS は非対応。CentOS 7 は EOL（2024-06-30）で、標準の Python が 2.7（python3 でも 3.6）のため、
+        # Python 3.12 前提の WEKO は構築できない。docker（Dockerfile）で構築すること。
+        # 以前の処理は参考として残す（呼び出しはしない）。
+        echo "[ERROR] Sorry, CentOS ${os_release} is not supported. Please use Docker."
+        exit 1
+        #echo "[INFO] provision-web: branch=centos"
+        #if [ "$os_release" = "7" ]; then
+        #    provision_web_common_centos7
+        #    provision_web_libpostgresql_centos7
+        #    setup_npm_and_css_js_filters
+        #    setup_virtualenvwrapper
+        #    #setup_nginx_centos7
+        #    setup_libreoffice_centos7
+        #    cleanup_web_centos7
+        #else
+        #    echo "[ERROR] Sorry, unsupported release ${os_release}."
+        #    exit 1
+        #fi
     else
         echo "[ERROR] Sorry, unsupported distribution ${os_distribution}."
         exit 1

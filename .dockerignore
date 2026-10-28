@@ -35,3 +35,13 @@ metrix
 **/.pytest_cache
 **/__pycache__
 **/.tx
+
+
+**/htmlcov
+**/.coverage
+**/.coverage.*
+**/coverage.xml
+**/tox.result.gz
+modules/*/result.txt
+**/.mypy_cache
+**/node_modules
