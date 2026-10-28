@@ -140,16 +140,16 @@ curl -ku admin:${OPENSEARCH_INITIAL_ADMIN_PASSWORD} -XPUT 'https://'${INVENIO_EL
 }'
 
 # ${INVENIO_WEB_INSTANCE} index destroy --yes-i-know
-# curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XDELETE 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-stats-index-*'
-# curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XDELETE 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-events-stats-index-*'
-# curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XDELETE 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/_plugins/_ism/policies/weko_stats_policy'
+# curl -w '\n' -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XDELETE 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-stats-index-*'
+# curl -w '\n' -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XDELETE 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-events-stats-index-*'
+# curl -w '\n' -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XDELETE 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/_plugins/_ism/policies/weko_stats_policy'
 ${INVENIO_WEB_INSTANCE} index init
 sleep 20
 ${INVENIO_WEB_INSTANCE} index queue init
 # sphinxdoc-index-initialisation-end
 
 # elasticsearch-ilm-setting-begin
-curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/_plugins/_ism/policies/weko_stats_policy' -H 'Content-Type: application/json' -d '
+curl -w '\n' -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/_plugins/_ism/policies/weko_stats_policy' -H 'Content-Type: application/json' -d '
 {
   "policy": {
     "description": "Rollover policy based on max size",
@@ -169,7 +169,7 @@ curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'$
   }
 }'
 
-curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-stats-index-000001' -H 'Content-Type: application/json' -d '
+curl -w '\n' -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-stats-index-000001' -H 'Content-Type: application/json' -d '
 {
   "aliases": {
     "'${SEARCH_INDEX_PREFIX}'-stats-index": {
@@ -177,7 +177,7 @@ curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'$
     }
   }
 }'
-curl -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-events-stats-index-000001' -H 'Content-Type: application/json' -d '
+curl -w '\n' -ku ${INVENIO_OPENSEARCH_USER}:${INVENIO_OPENSEARCH_PASS} -XPUT 'https://'${INVENIO_ELASTICSEARCH_HOST}':9200/'${SEARCH_INDEX_PREFIX}'-events-stats-index-000001' -H 'Content-Type: application/json' -d '
 {
   "aliases": {
     "'${SEARCH_INDEX_PREFIX}'-events-stats-index": {
